@@ -35,7 +35,8 @@
   --xs:.12s;--sm:.18s;--md:.28s;--lg:.42s;--xl:.55s
 }
 html{scroll-behavior:smooth}
-body{font-family:var(--font);background:var(--bg);color:var(--tx);min-height:100vh;overflow-x:hidden;overscroll-behavior:none}
+body{font-family:var(--font);background:radial-gradient(circle at 18% -10%,rgba(255,55,95,.12),transparent 34%),radial-gradient(circle at 86% -8%,rgba(255,255,255,.07),transparent 28%),var(--bg);color:var(--tx);min-height:100vh;overflow-x:hidden;overscroll-behavior:none}
+:focus-visible{outline:2px solid rgba(255,255,255,.7);outline-offset:3px}
 
 /* KEYFRAMES */
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
@@ -146,6 +147,7 @@ main{padding-bottom:5rem}
 .sections-wrap{padding:0 2rem}
 .section{margin-bottom:2.5rem}
 .section-head{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.section-head::after{content:"";height:.5px;flex:1;min-width:32px;background:linear-gradient(to right,rgba(255,255,255,.13),transparent)}
 .section-name{font-size:.95rem;font-weight:700;letter-spacing:-.2px}
 .pip{width:6px;height:6px;border-radius:50%;flex-shrink:0;opacity:.6}
 .gtag{font-size:.58rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--tx3);margin-left:2px}
@@ -163,12 +165,14 @@ main{padding-bottom:5rem}
 
 /* CARD */
 .card{flex:0 0 136px;border-radius:12px;overflow:hidden;cursor:pointer;position:relative;background:var(--s1);border:.5px solid var(--b1);transition:transform var(--md) var(--spring),box-shadow var(--md) var(--ease-out),border-color var(--sm) var(--ease-out);will-change:transform;backface-visibility:hidden;scroll-snap-align:start}
+.card::before{content:"";position:absolute;inset:0;border-radius:inherit;background:linear-gradient(118deg,transparent 34%,rgba(255,255,255,.18) 50%,transparent 66%);transform:translateX(-130%);transition:transform .8s var(--ease-out);pointer-events:none;z-index:4}
+.card:hover::before{transform:translateX(130%)}
 .card:hover{transform:scale(1.07) translateY(-5px);box-shadow:0 22px 58px rgba(0,0,0,.78),0 0 0 .5px rgba(255,255,255,.1);z-index:5;border-color:var(--b2)}
 .card:active{transform:scale(.97) translateY(0);transition-duration:var(--xs)}
 .card img{width:100%;aspect-ratio:2/3;object-fit:cover;display:block;transition:transform var(--md) var(--ease-out)}
 .card:hover img{transform:scale(1.03)}
 .no-poster{width:100%;aspect-ratio:2/3;background:linear-gradient(145deg,#111,#1a1a1a);display:flex;align-items:flex-end;padding:10px;font-size:.7rem;color:var(--tx2);line-height:1.3}
-.card-ov{position:absolute;inset:0;background:linear-gradient(transparent 38%,rgba(0,0,0,.95));opacity:0;transition:opacity var(--sm) var(--ease-out);display:flex;flex-direction:column;justify-content:flex-end;padding:9px 8px}
+.card-ov{position:absolute;inset:0;background:linear-gradient(transparent 38%,rgba(0,0,0,.95));opacity:0;transition:opacity var(--sm) var(--ease-out);display:flex;flex-direction:column;justify-content:flex-end;padding:9px 8px;z-index:5;pointer-events:none}
 .card:hover .card-ov{opacity:1}
 .card-ov-title{font-size:.72rem;font-weight:600;line-height:1.3;margin-bottom:3px}
 .card-ov-sub{font-size:.63rem;color:rgba(255,255,255,.6);font-weight:600}
@@ -180,6 +184,9 @@ main{padding-bottom:5rem}
 .card-bm.saved svg{stroke:var(--tx)}
 .card-rated{position:absolute;top:6px;left:6px;background:rgba(255,214,10,.18);border:.5px solid rgba(255,214,10,.35);border-radius:5px;font-size:.6rem;font-weight:700;padding:2px 6px;color:var(--yellow);opacity:0;transition:opacity var(--sm) var(--ease-out)}
 .card:hover .card-rated,.card-rated.visible{opacity:1}
+.card-progress-badge{position:absolute;left:6px;bottom:7px;z-index:6;background:rgba(0,0,0,.72);border:.5px solid rgba(255,255,255,.22);border-radius:7px;color:rgba(255,255,255,.88);font-size:.58rem;font-weight:800;padding:3px 7px;backdrop-filter:blur(14px) saturate(180%);-webkit-backdrop-filter:blur(14px) saturate(180%)}
+.card-progress-line{position:absolute;left:0;right:0;bottom:0;height:2px;background:rgba(255,255,255,.08);z-index:6}
+.card-progress-line span{display:block;height:100%;background:linear-gradient(90deg,var(--green),rgba(255,255,255,.92));border-radius:0 2px 2px 0}
 .card-top10{position:absolute;bottom:0;left:-6px;font-size:3.8rem;font-weight:900;line-height:.85;color:transparent;-webkit-text-stroke:2px rgba(255,255,255,.35);pointer-events:none;z-index:3;transition:-webkit-text-stroke-color var(--md) var(--ease-out)}
 .card:hover .card-top10{-webkit-text-stroke-color:rgba(255,255,255,.55)}
 .plus-card{flex:0 0 136px;border-radius:12px;cursor:pointer;position:relative;background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;aspect-ratio:2/3;transition:background var(--sm) var(--ease-out),border-color var(--sm) var(--ease-out),transform var(--sm) var(--spring);flex-direction:column;gap:6px;will-change:transform}
@@ -351,7 +358,8 @@ main{padding-bottom:5rem}
 .ctrl-group{display:flex;flex-direction:column;gap:4px}
 .ctrl-label{font-size:.62rem;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.7px}
 .ctrl-hint{font-size:.6rem;color:var(--tx3);margin-top:2px;font-style:italic}
-.player-box{width:100%;aspect-ratio:16/9;background:#000;border-radius:var(--r2);overflow:hidden;border:.5px solid var(--b1);box-shadow:0 32px 80px rgba(0,0,0,.9);position:relative}
+.player-box{width:100%;aspect-ratio:16/9;background:#000;border-radius:var(--r2);overflow:hidden;border:.5px solid var(--b1);box-shadow:0 32px 80px rgba(0,0,0,.9),0 0 0 1px rgba(255,255,255,.035);position:relative}
+.player-box::after{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 1px 0 rgba(255,255,255,.14),inset 0 -1px 0 rgba(255,255,255,.04);pointer-events:none;z-index:2}
 .player-box iframe{width:100%;height:100%;border:none;display:block;position:relative;z-index:1}
 
 /* FOLDER PICKER */
@@ -1092,7 +1100,7 @@ async function loadHome(){
 }
 
 /* CW */
-function renderCW(container,items){const old=document.getElementById('cw-section');if(old)old.remove();const sec=document.createElement('div');sec.className='section';sec.id='cw-section';sec.innerHTML=`<div class="section-head"><span class="section-name">Continua a guardare</span></div><div class="row" id="cw-row"></div>`;container.insertBefore(sec,container.firstChild);buildCWRow(sec.querySelector('#cw-row'),items);}
+function renderCW(container,items){const old=document.getElementById('cw-section');if(old)old.remove();const sec=document.createElement('div');sec.className='section';sec.id='cw-section';sec.innerHTML=`<div class="section-head"><span class="section-name">Continua a guardare</span><span class="gtag">Auto-save</span></div><div class="row" id="cw-row"></div>`;container.insertBefore(sec,container.firstChild);buildCWRow(sec.querySelector('#cw-row'),items);}
 function buildCWRow(row,items){
   row.innerHTML='';
   items.forEach(item=>{
@@ -1134,9 +1142,18 @@ async function loadFilm(){if(loaded.film)return;loaded.film=true;buildFilters('f
 async function loadAnime(){if(loaded.anime)return;loaded.anime=true;const el=document.getElementById('anime-secs');el.innerHTML='<div class="spin-wrap"><div class="spinner"></div></div>';try{const [pop,top,movies,action,romance,isekai]=await Promise.all([tmdb('/discover/tv',{with_genres:'16',sort_by:'popularity.desc',with_origin_country:'JP'}),tmdb('/discover/tv',{with_genres:'16',sort_by:'vote_average.desc',vote_count_gte:'400',with_origin_country:'JP'}),tmdb('/discover/movie',{with_genres:'16',sort_by:'popularity.desc',with_origin_country:'JP'}),tmdb('/discover/tv',{with_genres:'16,28',sort_by:'popularity.desc',with_origin_country:'JP'}),tmdb('/discover/tv',{with_genres:'16,10749',sort_by:'popularity.desc',with_origin_country:'JP'}),tmdb('/search/tv',{query:'isekai',with_origin_country:'JP'})]);el.innerHTML='';const mark=arr=>arr.map(x=>({...x,media_type:x.media_type||'tv',_anime:1}));if(pop.results?.length){addSec(el,'Anime più popolari',mark(pop.results),null,'');pop.results.forEach(x=>{if(x.poster_path)randomPools.anime.push({...x,media_type:'tv',_anime:1});});}if(top.results?.length)addSec(el,'Meglio votati',mark(top.results),null,'');if(action.results?.length)addSec(el,'Azione & Avventura',mark(action.results),null,'genre');if(romance.results?.length)addSec(el,'Romance & Shōjo',mark(romance.results),null,'genre');if(isekai.results?.length)addSec(el,'Isekai',mark(isekai.results),null,'genre');if(movies.results?.length)addSec(el,'Film anime',mark(movies.results.map(x=>({...x,media_type:'movie'}))),null,'');}catch(e){el.innerHTML='<div class="err">Errore.</div>';}}
 
 /* RENDER HELPERS */
+function cardProgressHTML(item,type){
+  const id=item.id;if(!id)return '';
+  const last=type==='tv'?getLastWatched(id):null;
+  const prog=getProgress(id,type,last?.season||null,last?.episode||null);
+  if(!prog||!prog.text)return '';
+  const est=type==='movie'?5400:2400;
+  const pct=prog.secs?Math.min(Math.max(Math.round((prog.secs/est)*100),4),95):0;
+  return `<div class="card-progress-badge">📍 ${prog.text}</div>${pct?`<div class="card-progress-line"><span style="width:${pct}%"></span></div>`:''}`;
+}
 function addSec(container,name,items,color,type){if(!items?.length)return;const sec=document.createElement('div');sec.className='section';const dot=color?`<span class="pip" style="background:${color}"></span>`:'';const gt=type==='genre'?`<span class="gtag">Genere</span>`:'';sec.innerHTML=`<div class="section-head">${dot}<span class="section-name">${name}</span>${gt}</div><div class="row">${items.map(cardHTML).join('')}</div>`;container.appendChild(sec);drag(sec.querySelector('.row'));}
-function cardHTML(item){const title=item.title||item.name||'',type=item.media_type||'movie',poster=item.poster_path||item.poster||'',score=item.vote_average?'★ '+item.vote_average.toFixed(1):'';const inLib=isInAnyFolder(item.id),anime=item._anime?1:0,rated=getRating(item.id);const img=poster?`<img src="${IMG}${poster}" alt="${ea(title)}" loading="lazy">`:`<div class="no-poster">${title}</div>`;return `<div class="card" data-id="${item.id}" data-type="${type}" data-title="${ea(title)}" data-poster="${poster}" data-anime="${anime}">${img}${rated?`<div class="card-rated visible">⭐ ${rated}/5</div>`:`<div class="card-rated">⭐ ${rated}/5</div>`}<div class="card-ov"><div class="card-ov-title">${title}</div><div class="card-ov-sub">${score||'ⓘ Dettagli'}</div></div><div class="card-bm${inLib?' saved':''}" data-bm-id="${item.id}" data-bm-type="${type}" data-bm-title="${ea(title)}" data-bm-poster="${poster}" data-bm-anime="${anime}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></div></div>`;}
-function listCardHTML(item,folderId){const title=item.title||'',type=item.type||'movie',poster=item.poster||'',anime=item.isAnime?1:0;const img=poster?`<img src="${IMG}${poster}" alt="${ea(title)}" loading="lazy">`:`<div class="no-poster">${ea(title)}</div>`;const score=getRating(item.id);return `<div class="card" data-id="${item.id}" data-type="${type}" data-title="${ea(title)}" data-poster="${poster}" data-anime="${anime}">${img}<button class="card-rm-item" data-rm-from="${folderId}" data-rm-id="${item.id}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>${score?`<div class="card-rated visible">⭐ ${score}/5</div>`:''}<div class="card-ov"><div class="card-ov-title">${ea(title)}</div><div class="card-ov-sub">ⓘ Dettagli</div></div></div>`;}
+function cardHTML(item){const title=item.title||item.name||'',type=item.media_type||'movie',poster=item.poster_path||item.poster||'',score=item.vote_average?'★ '+item.vote_average.toFixed(1):'';const inLib=isInAnyFolder(item.id),anime=item._anime?1:0,rated=getRating(item.id),progress=cardProgressHTML(item,type);const img=poster?`<img src="${IMG}${poster}" alt="${ea(title)}" loading="lazy">`:`<div class="no-poster">${title}</div>`;return `<div class="card" data-id="${item.id}" data-type="${type}" data-title="${ea(title)}" data-poster="${poster}" data-anime="${anime}">${img}${rated?`<div class="card-rated visible">⭐ ${rated}/5</div>`:`<div class="card-rated">⭐ ${rated}/5</div>`}${progress}<div class="card-ov"><div class="card-ov-title">${title}</div><div class="card-ov-sub">${score||'ⓘ Dettagli'}</div></div><div class="card-bm${inLib?' saved':''}" data-bm-id="${item.id}" data-bm-type="${type}" data-bm-title="${ea(title)}" data-bm-poster="${poster}" data-bm-anime="${anime}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></div></div>`;}
+function listCardHTML(item,folderId){const title=item.title||'',type=item.type||'movie',poster=item.poster||'',anime=item.isAnime?1:0,progress=cardProgressHTML(item,type);const img=poster?`<img src="${IMG}${poster}" alt="${ea(title)}" loading="lazy">`:`<div class="no-poster">${ea(title)}</div>`;const score=getRating(item.id);return `<div class="card" data-id="${item.id}" data-type="${type}" data-title="${ea(title)}" data-poster="${poster}" data-anime="${anime}">${img}<button class="card-rm-item" data-rm-from="${folderId}" data-rm-id="${item.id}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>${score?`<div class="card-rated visible">⭐ ${score}/5</div>`:''}${progress}<div class="card-ov"><div class="card-ov-title">${ea(title)}</div><div class="card-ov-sub">ⓘ Dettagli</div></div></div>`;}
 function psCardHTML(p){const known=(p.known_for||[]).map(k=>k.title||k.name).filter(Boolean).slice(0,2).join(', ');const photo=p.profile_path?`<img src="${FACE}${p.profile_path}" class="pscard-photo" loading="lazy" alt="${ea(p.name)}">`:`<div class="pscard-photo pscard-nophoto">👤</div>`;return `<div class="pscard" data-actor-id="${p.id}">${photo}<div class="pscard-name">${ea(p.name)}</div>${known?`<div class="pscard-known">${ea(known)}</div>`:''}</div>`;}
 function starRatingHTML(id){const cur=getRating(id);return `<div class="dm-rating-row"><div class="dm-rating-label">La tua valutazione</div><div class="star-row">${[1,2,3,4,5].map(n=>`<button class="star-btn${n<=cur?' active':''}" data-star="${n}" data-rid="${id}">★</button>`).join('')}</div></div>`;}
 
