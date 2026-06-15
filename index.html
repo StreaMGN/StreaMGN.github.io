@@ -900,7 +900,7 @@ function parsePlayerPayload(data){
   let payload=data;
   if(typeof payload==='string'){try{payload=JSON.parse(payload);}catch(e){return null;}}
   if(!payload||typeof payload!=='object')return null;
-  if(payload.type==='PLAYER_EVENT'&&payload.data)return payload.data;
+  if(payload.type==='PLAYER_EVENT')return payload.data||payload.event||payload;
   if(payload.event||payload.currentTime!=null||payload.time!=null||payload.duration!=null)return payload;
   return null;
 }
