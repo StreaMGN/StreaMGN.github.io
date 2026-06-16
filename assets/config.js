@@ -10,6 +10,8 @@ window.STREAMGN_CONFIG = {
     still: 'https://image.tmdb.org/t/p/w300'
   },
   sportDefaultUrl: 'https://pepperstream.xyz/index.php',
+  remoteConfigUrl: 'assets/remote-config.json',
+  sportAdminEditUrl: 'https://github.com/StreaMGN/StreaMGN.github.io/edit/main/assets/remote-config.json',
   tmdbCacheMaxAge: 6 * 60 * 60 * 1000,
   tmdbCacheMaxItems: 260,
   notificationInterval: 6 * 60 * 60 * 1000

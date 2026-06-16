@@ -172,7 +172,6 @@
     </div>
     <div class="player-tools" id="player-tools">
       <button class="gbtn" id="btn-anime-link" style="display:none">Imposta link episodio</button>
-      <button class="gbtn" id="btn-player-sandbox">Protezione redirect: compatibilità</button>
       <span class="player-source-state" id="player-source-state">Sorgente non verificata</span>
     </div>
     <div class="player-box"><iframe id="vix-frame" allow="autoplay; fullscreen; picture-in-picture; encrypted-media; airplay" allowfullscreen playsinline webkit-playsinline referrerpolicy="no-referrer"></iframe></div>
@@ -220,14 +219,25 @@
 <main>
   <div id="page-home" class="page active"><div id="hero-wrap"></div><div class="sections-wrap" id="home-secs"></div></div>
   <div id="page-sport" class="page">
-    <div class="sp-iframe-bar"><select class="gsel sport-preset-select" id="sport-preset-select"></select><span class="sp-iframe-url" id="sport-url-label">pepperstream.xyz</span><button class="sp-iframe-btn" id="btn-sport-link">Cambia link</button><button class="sp-iframe-btn" id="btn-sport-save-preset">Salva preset</button><a class="sp-iframe-btn" id="sport-open-link" href="https://pepperstream.xyz/index.php" target="_blank" rel="noopener"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Apri fuori</a></div>
-    <div id="sport-iframe-wrap"><iframe id="sport-iframe" src="" allow="autoplay; fullscreen; encrypted-media" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" referrerpolicy="no-referrer" allowfullscreen></iframe></div>
+    <div class="sp-iframe-bar">
+      <span class="sp-live-pill">Sport live</span>
+      <span class="sp-iframe-url" id="sport-url-label">pepperstream.xyz</span>
+      <button class="sp-iframe-btn" id="btn-sport-refresh">Aggiorna</button>
+      <a class="sp-iframe-btn" id="sport-open-link" href="https://pepperstream.xyz/index.php" target="_blank" rel="noopener"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Apri fuori</a>
+      <a class="sp-iframe-btn sp-admin-btn" id="sport-admin-link" href="https://github.com/StreaMGN/StreaMGN.github.io/edit/main/assets/remote-config.json" target="_blank" rel="noopener">Admin</a>
+    </div>
+    <div class="sp-admin-panel" id="sport-admin-panel">
+      <input class="sp-admin-input" id="sport-admin-input" placeholder="Nuovo link globale sport">
+      <button class="sp-iframe-btn" id="btn-sport-copy-config">Copia config</button>
+      <span class="sp-admin-help">Modifica il file remoto su GitHub: il link cambia per tutti.</span>
+    </div>
+    <div id="sport-iframe-wrap"><iframe id="sport-iframe" src="" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" referrerpolicy="no-referrer" allowfullscreen></iframe></div>
   </div>
   <div id="page-serie" class="page"><div class="pg-header"><span class="pg-title">Serie TV</span><button class="random-btn" data-random="serie">🎲 Scegli per me</button></div><div class="filter-bar" id="filter-serie"></div><div class="sections-wrap" id="serie-secs"></div></div>
   <div id="page-film" class="page"><div class="pg-header"><span class="pg-title">Film</span><button class="random-btn" data-random="film">🎲 Scegli per me</button></div><div class="filter-bar" id="filter-film"></div><div class="sections-wrap" id="film-secs"></div></div>
   <div id="page-anime" class="page"><div class="pg-header"><span class="pg-title">Anime</span><button class="random-btn" data-random="anime">🎲 Scegli per me</button></div><div class="sections-wrap" id="anime-secs"></div></div>
   <div id="page-novita" class="page"><div class="pg-header"><span class="pg-title">Novità</span><button class="random-btn" id="btn-smart-random">🎯 Random intelligente</button></div><div class="sections-wrap" id="novita-secs"></div></div>
-  <div id="page-liste" class="page"><div class="pg-header"><span class="pg-title">Le mie liste</span></div><div class="liste-create-row"><button class="gbtn" id="btn-export-lists">📤 Esporta liste</button><button class="gbtn" id="btn-backup-all">💾 Backup completo</button><button class="gbtn" id="btn-import-lists">📥 Importa</button><button class="gbtn gbtn-red" id="btn-clean-lists">Pulisci liste</button><select class="gsel" id="liste-sort"><option value="recent">Aggiunti di recente</option><option value="title">Titolo</option><option value="rating">Voto</option><option value="progress">Progresso</option></select></div><div class="liste-filter-bar" id="liste-filter-bar"><button class="list-filter-btn active" data-list-filter="all">Tutto</button><button class="list-filter-btn" data-list-filter="started">Iniziati</button><button class="list-filter-btn" data-list-filter="completed">Completati</button><button class="list-filter-btn" data-list-filter="queued">Da vedere</button></div><div id="liste-body"></div></div>
+  <div id="page-liste" class="page"><div class="pg-header"><span class="pg-title">Le mie liste</span></div><div class="liste-create-row"><button class="gbtn" id="btn-new-list">Nuova lista</button><button class="gbtn" id="btn-export-lists">📤 Esporta liste</button><button class="gbtn" id="btn-backup-all">💾 Backup completo</button><button class="gbtn" id="btn-import-lists">📥 Importa</button><button class="gbtn gbtn-red" id="btn-clean-lists">Ripristina liste</button><select class="gsel" id="liste-sort"><option value="recent">Aggiunti di recente</option><option value="title">Titolo</option><option value="rating">Voto</option><option value="progress">Progresso</option></select></div><div class="liste-filter-bar" id="liste-filter-bar"><button class="list-filter-btn active" data-list-filter="all">Tutto</button><button class="list-filter-btn" data-list-filter="started">Iniziati</button><button class="list-filter-btn" data-list-filter="completed">Completati</button><button class="list-filter-btn" data-list-filter="queued">Da vedere</button></div><div id="liste-body"></div></div>
 </main>
 
 <!-- NOTIFICATION PANEL -->
