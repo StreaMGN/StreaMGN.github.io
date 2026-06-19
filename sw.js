@@ -6,8 +6,8 @@ const DB_NAME='streamgn-db';
 const STORE='kv';
 const INTERVAL=6*60*60*1000;
 
-self.addEventListener('install',event=>{self.skipWaiting();event.waitUntil(caches.open('streamgn-v5').then(cache=>cache.addAll(['./','./index.html','./assets/styles.css','./assets/config.js','./assets/app.js','./assets/remote-config.json','./assets/streamgn-logo.png','./manifest.webmanifest']).catch(()=>{})));});
-self.addEventListener('activate',event=>{event.waitUntil(self.clients.claim());});
+self.addEventListener('install',event=>{self.skipWaiting();event.waitUntil(caches.open('streamgn-v6').then(cache=>cache.addAll(['./','./index.html','./assets/styles.css','./assets/config.js','./assets/app.js','./assets/remote-config.json','./assets/streamgn-logo.png','./manifest.webmanifest']).catch(()=>{})));});
+self.addEventListener('activate',event=>{event.waitUntil(Promise.all([self.clients.claim(),caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('streamgn-')&&k!=='streamgn-v6').map(k=>caches.delete(k))))]));});
 self.addEventListener('fetch',event=>{if(event.request.method!=='GET')return;event.respondWith(fetch(event.request).catch(()=>caches.match(event.request)));});
 
 function openDB(){
@@ -87,7 +87,7 @@ async function checkUpdates(force=false){
   data.lastCheck=now;
   await writeKey('svx_notif',data);
   if(newCount>0&&self.registration?.showNotification){
-    await self.registration.showNotification('StreaMGN',{body:`${newCount} nuovi aggiornamenti`,icon:'./assets/streamgn-logo.png',tag:'streamgn-updates',data:{url:'./?page=novita'}});
+    await self.registration.showNotification('StreaMGN',{body:`${newCount} nuovi aggiornamenti`,icon:'./assets/streamgn-logo.png',tag:'streamgn-updates',data:{url:'./?page=profilo'}});
   }
   return newCount;
 }

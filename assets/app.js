@@ -6,13 +6,14 @@ const API=CONFIG.apiBase||'https://api.themoviedb.org/3';
 let heroItems=[],heroIdx=0,heroTimer,currentTvId=null,currentSrc='vixsrc',currentIsAnime=false;
 let currentDetailId=null,currentDetailType=null,currentDetailTitle='',currentDetailPoster='',currentDetailIsAnime=false,currentDetailSeasons=[];
 let fpCurrentItem=null,fpPendingCat=null,confirmCallback=null,searchAddToFolderId=null,searchAddFolderName='';
-const loaded={home:false,serie:false,film:false,anime:false,novita:false};
+const loaded={home:false,serie:false,film:false,anime:false,profilo:false};
 const randomPools={serie:[],film:[],anime:[]};
 let activeFilterGenre={serie:null,film:null},currentTrailerKey=null,epChangeTimer=null,listeFilter='all',listeSort='recent';
 let playerProgId=null,playerProgType=null,playerProgSeason=null,playerProgEpisode=null,playerNoteSavedThisSession=false;
-let playerSessionTitle='',playerSessionPoster='',playerSessionIsAnime=false,playerLastAutoSecs=0,playerLastAutoSaveAt=0,playerSessionStartedAt=0,playerSessionBaseSecs=0,playerAutoSaveTimer=null,playerHasRealProgress=false,playerSourceHealthTimer=null;
+let playerSessionTitle='',playerSessionPoster='',playerSessionIsAnime=false,playerLastAutoSecs=0,playerLastAutoSaveAt=0,playerAutoSaveTimer=null,playerHasRealProgress=false,playerSourceHealthTimer=null;
+let profileStatsCache=null;
 const SOURCES_NORMAL=[{id:'vixsrc',label:'VixSrc'},{id:'vidsrc',label:'VidSrc'},{id:'embed',label:'Embed.su'}];
-const SOURCES_ANIME=[{id:'anime-custom',label:'Link anime'},{id:'vidsrc',label:'VidSrc'},{id:'embed',label:'Embed.su'}];
+const SOURCES_ANIME=[{id:'anime-custom',label:'Episodio ITA'},{id:'vixsrc',label:'VixSrc'},{id:'vidsrc',label:'VidSrc'},{id:'embed',label:'Embed.su'}];
 const SPORT_DEFAULT_URL=CONFIG.sportDefaultUrl||'https://pepperstream.xyz/index.php';
 const REMOTE_CONFIG_URL=CONFIG.remoteConfigUrl||'assets/remote-config.json';
 const SPORT_ADMIN_EDIT_URL=CONFIG.sportAdminEditUrl||'https://github.com/StreaMGN/StreaMGN.github.io/edit/main/assets/remote-config.json';
@@ -117,7 +118,7 @@ function refreshAfterStorageHydrated(){
   if(active==='page-serie'){loaded.serie=false;loadSerie();}
   if(active==='page-film'){loaded.film=false;loadFilm();}
   if(active==='page-anime'){loaded.anime=false;loadAnime();}
-  if(active==='page-novita'){loaded.novita=false;loadNovita();}
+  if(active==='page-profilo'){loaded.profilo=false;loadProfilo();}
   if(active==='page-liste')renderListePage();
   if(document.getElementById('search-ov').classList.contains('open'))renderSearchRecent();
 }
@@ -223,20 +224,21 @@ function getLastWatched(id){try{return getWatching()[String(id)]||null;}catch(e)
 function progKey(id,type,season,episode){return type==='movie'?`prog_${id}_movie`:`prog_${id}_s${season||1}_e${episode||1}`;}
 function getProgressStore(){return readJSONKey('svx_prog',{});}
 function saveProgressStore(p){writeJSONKey('svx_prog',p);}
-function getProgress(id,type,season,episode){try{return getProgressStore()[progKey(id,type,season,episode)]||null;}catch(e){return null;}}
+function isPreciseProgress(prog){return !!prog&&!!prog.secs&&(prog.confidence==='real'||prog.real||prog.confidence==='manual'||prog.manual);}
+function getProgress(id,type,season,episode){try{const prog=getProgressStore()[progKey(id,type,season,episode)]||null;return isPreciseProgress(prog)?prog:null;}catch(e){return null;}}
 function saveProgressNote(id,type,season,episode,text,secs){
   try{const p=getProgressStore();p[progKey(id,type,season,episode)]={text,secs,confidence:'manual',manual:true,ts:Date.now()};const ks=Object.keys(p).sort((a,b)=>(p[b].ts||0)-(p[a].ts||0));if(ks.length>300)ks.slice(300).forEach(k=>delete p[k]);saveProgressStore(p);recordHistory(id,type,playerSessionTitle,playerSessionPoster,season,episode,secs,'manual');}catch(e){}
 }
 function fmtProgressSecs(secs){secs=Math.max(0,Math.floor(Number(secs)||0));const h=Math.floor(secs/3600),m=Math.floor((secs%3600)/60),s=secs%60;return h?`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${m}:${String(s).padStart(2,'0')}`;}
-function progressConfidenceLabel(prog){if(!prog)return'';if(prog.confidence==='real'||prog.real)return' · reale';if(prog.confidence==='manual'||prog.manual)return' · manuale';return' · stimato';}
+function progressConfidenceLabel(prog){if(!prog)return'';if(prog.confidence==='real'||prog.real)return' · preciso';if(prog.confidence==='manual'||prog.manual)return' · manuale';return'';}
 function trimProgressStore(p){const ks=Object.keys(p).sort((a,b)=>(p[b].ts||0)-(p[a].ts||0));if(ks.length>300)ks.slice(300).forEach(k=>delete p[k]);}
-function saveProgressAuto(id,type,season,episode,secs,duration,confidence='estimated'){
+function saveProgressAuto(id,type,season,episode,secs,duration,confidence='real'){
   secs=Math.floor(Number(secs)||0);duration=Math.floor(Number(duration)||0);
-  if(!id||secs<5)return null;
+  if(!id||secs<5||confidence!=='real')return null;
   try{
     const p=getProgressStore(),key=progKey(id,type,season,episode);
     if(duration&&secs/duration>=.92){delete p[key];saveProgressStore(p);return null;}
-    p[key]={text:fmtProgressSecs(secs),secs,duration,auto:true,confidence,estimated:confidence==='estimated',real:confidence==='real',ts:Date.now()};
+    p[key]={text:fmtProgressSecs(secs),secs,duration,auto:true,confidence:'real',real:true,ts:Date.now()};
     trimProgressStore(p);saveProgressStore(p);return p[key];
   }catch(e){return null;}
 }
@@ -288,35 +290,27 @@ function isSeriesProbablySeen(tvId,seasons){
     return count>=s.episode_count;
   });
 }
-function resetPlayerAutoClock(startSecs){
-  playerSessionBaseSecs=Math.max(0,Math.floor(Number(startSecs)||0));
-  playerSessionStartedAt=Date.now();
+function resetPlayerAutoClock(){
   playerHasRealProgress=false;
+  playerLastAutoSecs=0;
+  playerLastAutoSaveAt=0;
 }
-function getEstimatedPlayerSecs(){
-  if(!playerSessionStartedAt)return playerSessionBaseSecs||0;
-  return (playerSessionBaseSecs||0)+Math.max(0,Math.floor((Date.now()-playerSessionStartedAt)/1000));
+function requestPlayerRealProgress(){
+  const fr=document.getElementById('vix-frame');
+  try{
+    fr?.contentWindow?.postMessage({type:'STREAMGN_GET_CURRENT_TIME',event:'getCurrentTime'},'*');
+    fr?.contentWindow?.postMessage('getCurrentTime','*');
+  }catch(e){}
+  return null;
 }
-function persistEstimatedProgress(){
-  if(!playerProgId)return null;
-  const secs=Math.max(playerLastAutoSecs||0,getEstimatedPlayerSecs());
-  if(secs<10)return null;
-  const saved=saveProgressAuto(playerProgId,playerProgType,playerProgSeason,playerProgEpisode,secs,0,'estimated');
-  if(!saved)return null;
-  playerLastAutoSecs=secs;playerLastAutoSaveAt=Date.now();playerNoteSavedThisSession=true;
-  saveWatching(playerProgId,playerProgType,playerSessionTitle,playerSessionPoster,playerProgSeason,playerProgEpisode);
-  recordHistory(playerProgId,playerProgType,playerSessionTitle,playerSessionPoster,playerProgSeason,playerProgEpisode,secs,'estimated');
-  refreshNoteBar(playerProgId,playerProgType,playerProgSeason,playerProgEpisode);refreshCW();
-  return saved;
-}
-function startPlayerAutoSave(startSecs){
-  stopPlayerAutoSave(false);resetPlayerAutoClock(startSecs);
-  playerAutoSaveTimer=setInterval(()=>persistEstimatedProgress(),20000);
+function persistEstimatedProgress(){return requestPlayerRealProgress();}
+function startPlayerAutoSave(){
+  stopPlayerAutoSave(false);resetPlayerAutoClock();
+  playerAutoSaveTimer=setInterval(()=>requestPlayerRealProgress(),10000);
 }
 function stopPlayerAutoSave(saveFirst=true){
-  if(saveFirst)persistEstimatedProgress();
+  if(saveFirst)requestPlayerRealProgress();
   if(playerAutoSaveTimer){clearInterval(playerAutoSaveTimer);playerAutoSaveTimer=null;}
-  playerSessionStartedAt=0;playerSessionBaseSecs=0;
 }
 function parseTimeInput(s){if(!s)return 0;s=String(s).trim();const pts=s.split(':').map(p=>parseInt(p)||0);if(pts.length===3)return pts[0]*3600+pts[1]*60+pts[2];if(pts.length===2)return pts[0]*60+pts[1];const n=parseInt(s);return isNaN(n)?0:n*60;}
 function refreshNoteBar(id,type,season,episode){
@@ -344,21 +338,24 @@ document.getElementById('btn-note-resume').addEventListener('click',function(){
 function trustedPlayerOrigin(origin){
   try{
     const host=new URL(origin).hostname;
-    return host==='vixsrc.to'||host.endsWith('.vixsrc.to')||host==='vidsrc.me'||host.endsWith('.vidsrc.me')||host==='embed.su'||host.endsWith('.embed.su');
+    return host==='vixsrc.to'||host.endsWith('.vixsrc.to')||host==='vidsrc.me'||host.endsWith('.vidsrc.me')||host==='vidsrc.xyz'||host.endsWith('.vidsrc.xyz')||host==='embed.su'||host.endsWith('.embed.su');
   }catch(e){return false;}
 }
 function parsePlayerPayload(data){
   let payload=data;
   if(typeof payload==='string'){try{payload=JSON.parse(payload);}catch(e){return null;}}
   if(!payload||typeof payload!=='object')return null;
-  if(payload.type==='PLAYER_EVENT')return payload.data||payload.event||payload;
-  if(payload.event||payload.currentTime!=null||payload.time!=null||payload.duration!=null)return payload;
+  if(payload.type==='PLAYER_EVENT')payload=payload.data||payload.event||payload;
+  if(payload.detail&&typeof payload.detail==='object')payload={...payload,...payload.detail};
+  if(payload.data&&typeof payload.data==='object')payload={...payload,...payload.data};
+  if(payload.player&&typeof payload.player==='object')payload={...payload,...payload.player};
+  if(payload.event||payload.currentTime!=null||payload.time!=null||payload.seconds!=null||payload.position!=null||payload.duration!=null)return payload;
   return null;
 }
 function handleAutoProgress(payload){
   if(!playerProgId||!payload)return;
   const eventName=String(payload.event||payload.name||payload.type||'').toLowerCase();
-  const secs=Number(payload.currentTime??payload.time??payload.current??payload.position??0);
+  const secs=Number(payload.currentTime??payload.time??payload.seconds??payload.current??payload.position??payload.playedSeconds??0);
   const duration=Number(payload.duration??payload.totalDuration??payload.total??0);
   const now=Date.now();
   if(!secs&&eventName!=='ended')return;
@@ -592,39 +589,99 @@ async function loadHome(){
   }catch(e){hw.innerHTML='<div class="err">Errore nel caricamento.</div>';}
 }
 
-function dashboardHTML(){
-  const hist=Object.values(readJSONKey('svx_hist',{})),folders=getFolders();
-  const hours=Math.round(hist.reduce((sum,x)=>sum+(Number(x.secs)||0),0)/3600);
-  const totalList=Object.values(folders).reduce((sum,f)=>sum+(f.items||[]).length,0);
-  const completed=Object.values(folders).filter(f=>f.g==='visti').reduce((sum,f)=>sum+(f.items||[]).length,0);
-  const streakDays=new Set(hist.map(x=>new Date(x.ts).toISOString().slice(0,10))).size;
-  return `<div class="premium-grid"><div class="premium-stat"><b>${hours}</b><span>ore tracciate</span></div><div class="premium-stat"><b>${totalList}</b><span>in lista</span></div><div class="premium-stat"><b>${completed}</b><span>completati</span></div><div class="premium-stat"><b>${streakDays}</b><span>giorni di visione</span></div></div>`;
+function hLabel(mins){mins=Math.max(0,Math.round(Number(mins)||0));const h=Math.floor(mins/60),m=mins%60;return h?`${h}h${m?` ${m}m`:''}`:`${m}m`;}
+function profileGenreNames(scores){return Object.entries(scores).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([name,count])=>({name,count}));}
+function profileRecentItems(limit=18){
+  return Object.values(readJSONKey('svx_hist',{})).filter(x=>x.poster).sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,limit).map(x=>({id:x.id,title:x.title,name:x.title,poster_path:x.poster,media_type:x.type,_anime:x.isAnime?1:0,_reason:x.type==='tv'&&x.season?`S${x.season}E${x.episode||1}`:'Visto di recente'}));
+}
+async function computeProfileStats(){
+  const folders=getFolders(),hist=Object.values(readJSONKey('svx_hist',{})).filter(x=>x.confidence==='real'||x.confidence==='manual'),epSeen=getEpisodeSeenStore();
+  const filmSeen=folders.film_visti?.items||[],seriesSeen=[...(folders.serie_vc?.items||[]),...(folders.serie_vo?.items||[])];
+  const listed=Object.values(folders).reduce((sum,f)=>sum+(f.items||[]).length,0),watching=Object.values(getWatching()).length;
+  const days=new Set(hist.map(x=>new Date(x.ts).toISOString().slice(0,10))).size;
+  const genreScores={},covers=profileRecentItems(12).map(x=>x.poster_path).filter(Boolean);
+  let filmMinutes=0,seriesMinutes=0,episodesSeen=Object.keys(epSeen).length;
+  await Promise.all(filmSeen.slice(0,80).map(async item=>{
+    try{const info=await tmdb(`/movie/${item.id}`);filmMinutes+=Number(info.runtime)||0;(info.genres||[]).forEach(g=>{genreScores[g.name]=(genreScores[g.name]||0)+2;});if(info.poster_path&&!covers.includes(info.poster_path))covers.push(info.poster_path);}catch(e){}
+  }));
+  await Promise.all(seriesSeen.slice(0,60).map(async item=>{
+    try{const info=await tmdb(`/tv/${item.id}`);const avg=Number(info.episode_run_time?.[0])||42;seriesMinutes+=avg*(Number(info.number_of_episodes)||0);(info.genres||[]).forEach(g=>{genreScores[g.name]=(genreScores[g.name]||0)+2;});if(info.poster_path&&!covers.includes(info.poster_path))covers.push(info.poster_path);}catch(e){}
+  }));
+  const watchedSeriesIds=new Set(seriesSeen.map(x=>String(x.id)));
+  const epByShow={};
+  Object.keys(epSeen).forEach(k=>{const id=k.split('_s')[0];if(!watchedSeriesIds.has(id))epByShow[id]=(epByShow[id]||0)+1;});
+  await Promise.all(Object.entries(epByShow).slice(0,60).map(async([id,count])=>{
+    try{const info=await tmdb(`/tv/${id}`);const avg=Number(info.episode_run_time?.[0])||42;seriesMinutes+=avg*count;(info.genres||[]).forEach(g=>{genreScores[g.name]=(genreScores[g.name]||0)+1;});if(info.poster_path&&!covers.includes(info.poster_path))covers.push(info.poster_path);}catch(e){seriesMinutes+=42*count;}
+  }));
+  const precisionMinutes=hist.reduce((sum,x)=>sum+(Number(x.secs)||0)/60,0);
+  return {filmMinutes,seriesMinutes,totalMinutes:filmMinutes+seriesMinutes,precisionMinutes,filmSeen:filmSeen.length,seriesSeen:seriesSeen.length,episodesSeen,listed,watching,days,genres:profileGenreNames(genreScores),covers:covers.slice(0,18),recent:profileRecentItems(24)};
+}
+function profileStatsHTML(stats){
+  const genreHTML=stats.genres.length?stats.genres.map(g=>`<span class="profile-pill">${ea(g.name)} <b>${g.count}</b></span>`).join(''):'<span class="profile-muted">Ancora pochi dati per capire i generi preferiti.</span>';
+  const recentHTML=stats.recent.length?`<div class="row profile-row">${stats.recent.map(cardHTML).join('')}</div>`:'<div class="empty">Guarda o segna qualche contenuto per creare il tuo replay.</div>';
+  return `<section class="profile-hero">
+    <div class="profile-hero-bg">${stats.covers.slice(0,8).map(p=>`<img src="${IMG}${p}" alt="">`).join('')}</div>
+    <div class="profile-hero-grad"></div>
+    <div class="profile-hero-content">
+      <div class="profile-kicker">StreaMGN Replay</div>
+      <h1>Il tuo profilo visione</h1>
+      <p>Statistiche, gusti e contenuti recenti raccolti dalle tue liste e dai progressi precisi salvati.</p>
+      <button class="gbtn gbtn-white" id="btn-profile-share">Condividi JPEG</button>
+    </div>
+  </section>
+  <section class="profile-section">
+    <div class="premium-grid profile-grid">
+      <div class="premium-stat"><b>${hLabel(stats.totalMinutes)}</b><span>visione totale</span></div>
+      <div class="premium-stat"><b>${hLabel(stats.filmMinutes)}</b><span>film visti</span></div>
+      <div class="premium-stat"><b>${hLabel(stats.seriesMinutes)}</b><span>serie viste</span></div>
+      <div class="premium-stat"><b>${stats.episodesSeen}</b><span>episodi segnati</span></div>
+      <div class="premium-stat"><b>${stats.filmSeen}</b><span>film completati</span></div>
+      <div class="premium-stat"><b>${stats.seriesSeen}</b><span>serie completate</span></div>
+      <div class="premium-stat"><b>${stats.listed}</b><span>contenuti in liste</span></div>
+      <div class="premium-stat"><b>${stats.days}</b><span>giorni attivi</span></div>
+    </div>
+  </section>
+  <section class="profile-section"><div class="section-head"><span class="section-name">Generi che ti descrivono</span><span class="gtag">Profilo</span></div><div class="profile-pill-row">${genreHTML}</div></section>
+  <section class="profile-section"><div class="section-head"><span class="section-name">Ultime visioni</span><span class="gtag">Replay</span></div>${recentHTML}</section>`;
+}
+async function loadProfilo(){
+  if(loaded.profilo&&profileStatsCache)return;
+  loaded.profilo=true;
+  const el=document.getElementById('profile-wrap');if(!el)return;
+  el.innerHTML='<div class="spin-wrap"><div class="spinner"></div></div>';
+  try{profileStatsCache=await computeProfileStats();el.innerHTML=profileStatsHTML(profileStatsCache);document.getElementById('btn-profile-share')?.addEventListener('click',shareProfileWrapped);const row=el.querySelector('.profile-row');if(row)drag(row);}
+  catch(e){el.innerHTML='<div class="err">Errore nel caricamento del profilo.</div>';}
+}
+function drawRoundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+function loadCanvasImage(url){return new Promise(resolve=>{const img=new Image();img.crossOrigin='anonymous';img.onload=()=>resolve(img);img.onerror=()=>resolve(null);img.src=url;});}
+function wrapCanvasText(ctx,text,x,y,maxWidth,lineHeight,maxLines=3){const words=String(text).split(/\s+/);let line='',lines=0;for(const word of words){const test=line?line+' '+word:word;if(ctx.measureText(test).width>maxWidth&&line){ctx.fillText(line,x,y);y+=lineHeight;line=word;lines++;if(lines>=maxLines-1)break;}else line=test;}if(line)ctx.fillText(line,x,y);}
+async function shareProfileWrapped(){
+  const stats=profileStatsCache||await computeProfileStats(),canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');
+  canvas.width=1080;canvas.height=1350;
+  const grad=ctx.createLinearGradient(0,0,1080,1350);grad.addColorStop(0,'#050505');grad.addColorStop(.55,'#151515');grad.addColorStop(1,'#0a84ff');ctx.fillStyle=grad;ctx.fillRect(0,0,1080,1350);
+  const imgs=await Promise.all(stats.covers.slice(0,10).map(p=>loadCanvasImage(`${IMG_W}${p}`)));
+  imgs.filter(Boolean).forEach((img,i)=>{const x=620+(i%3)*138,y=90+Math.floor(i/3)*206;ctx.save();ctx.globalAlpha=.38;drawRoundRect(ctx,x,y,120,180,18);ctx.clip();ctx.drawImage(img,x,y,120,180);ctx.restore();});
+  ctx.fillStyle='rgba(255,255,255,.08)';drawRoundRect(ctx,70,70,940,1210,36);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='800 42px -apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif';ctx.fillText('StreaMGN Replay',110,150);
+  ctx.font='900 78px -apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif';wrapCanvasText(ctx,'Il mio profilo visione',110,255,620,86,2);
+  ctx.font='700 34px -apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif';ctx.fillStyle='rgba(255,255,255,.74)';ctx.fillText(`Totale: ${hLabel(stats.totalMinutes)}`,110,430);
+  const boxes=[['Film',hLabel(stats.filmMinutes)],['Serie',hLabel(stats.seriesMinutes)],['Episodi',String(stats.episodesSeen)],['Liste',String(stats.listed)]];
+  boxes.forEach((b,i)=>{const x=110+(i%2)*330,y=520+Math.floor(i/2)*170;ctx.fillStyle='rgba(255,255,255,.12)';drawRoundRect(ctx,x,y,290,126,24);ctx.fill();ctx.fillStyle='#fff';ctx.font='900 42px -apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif';ctx.fillText(b[1],x+26,y+55);ctx.fillStyle='rgba(255,255,255,.62)';ctx.font='700 24px -apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif';ctx.fillText(b[0],x+26,y+92);});
+  ctx.fillStyle='#fff';ctx.font='800 30px -apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif';ctx.fillText('Generi top',110,920);
+  ctx.font='700 27px -apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif';ctx.fillStyle='rgba(255,255,255,.78)';wrapCanvasText(ctx,(stats.genres.map(g=>g.name).join(' · ')||'Ancora in costruzione'),110,970,760,42,3);
+  ctx.font='700 24px -apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif';ctx.fillStyle='rgba(255,255,255,.58)';ctx.fillText('Creato con StreaMGN',110,1210);
+  canvas.toBlob(async blob=>{
+    if(!blob)return;
+    const file=new File([blob],'streamgn-replay.jpg',{type:'image/jpeg'});
+    try{if(navigator.canShare?.({files:[file]})){await navigator.share({title:'Il mio StreaMGN Replay',files:[file]});return;}}catch(e){}
+    const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='streamgn-replay.jpg';a.click();URL.revokeObjectURL(url);showToast('Replay JPEG creato ✓');
+  },'image/jpeg',.92);
 }
 function moodPickerHTML(){return `<div class="mood-row"><button class="mood-chip" data-mood="light">Leggero</button><button class="mood-chip" data-mood="thriller">Thriller</button><button class="mood-chip" data-mood="short">Da 20 minuti</button><button class="mood-chip" data-mood="movie">Filmone</button></div><div id="mood-results"></div>`;}
 async function loadMood(mood){
   const box=document.getElementById('mood-results');if(!box)return;box.innerHTML='<div class="spin-wrap"><div class="spinner"></div></div>';
   const cfg={light:['/discover/movie',{with_genres:35,sort_by:'popularity.desc'}],thriller:['/discover/movie',{with_genres:53,sort_by:'popularity.desc'}],short:['/discover/tv',{with_runtime_lte:25,sort_by:'popularity.desc'}],movie:['/discover/movie',{vote_average_gte:7.2,vote_count_gte:900,sort_by:'vote_average.desc'}]}[mood];
   try{const d=await tmdb(cfg[0],cfg[1]);const type=cfg[0].includes('/tv')?'tv':'movie';box.innerHTML=`<div class="row">${(d.results||[]).slice(0,18).map(x=>cardHTML({...x,media_type:type,_reason:'Mood picker'})).join('')}</div>`;drag(box.querySelector('.row'));}catch(e){box.innerHTML='<div class="empty">Nessun risultato.</div>';}
-}
-async function loadNovita(){
-  if(loaded.novita)return;loaded.novita=true;
-  const el=document.getElementById('novita-secs');el.innerHTML='<div class="spin-wrap"><div class="spinner"></div></div>';
-  const tracked=getTrackedWatchingSeries();
-  el.innerHTML=`<div class="section"><div class="section-head"><span class="section-name">Dashboard personale</span><span class="gtag">Stats</span></div>${dashboardHTML()}</div><div class="section"><div class="section-head"><span class="section-name">Mood picker</span><span class="gtag">Smart</span></div>${moodPickerHTML()}</div>`;
-  try{
-    const infos=await Promise.all(tracked.slice(0,30).map(async item=>{try{return{item,info:await tmdb(`/tv/${item.id}`)}}catch(e){return null;}}));
-    const recent=[],upcoming=[];
-    infos.filter(Boolean).forEach(({item,info})=>{
-      if(info.last_episode_to_air)recent.push({...item,poster:info.poster_path||item.poster,_reason:`Ultimo: S${info.last_episode_to_air.season_number}E${info.last_episode_to_air.episode_number}`});
-      if(info.next_episode_to_air)upcoming.push({...item,poster:info.poster_path||item.poster,_reason:`Prossimo: ${new Date(info.next_episode_to_air.air_date).toLocaleDateString('it-IT')}`});
-    });
-    if(recent.length)addSec(el,'Nuovi episodi dalle tue serie',recent.map(x=>({id:x.id,title:x.title,name:x.title,poster_path:x.poster,media_type:'tv',_reason:x._reason})),null,'smart');
-    if(upcoming.length)addSec(el,'Prossimamente',upcoming.map(x=>({id:x.id,title:x.title,name:x.title,poster_path:x.poster,media_type:'tv',_reason:x._reason})),null,'smart');
-  }catch(e){}
-  const abandoned=Object.values(getWatching()).filter(x=>Date.now()-(x.ts||0)>30*24*60*60*1000);
-  if(abandoned.length)addSec(el,'Forse abbandonati',abandoned.map(x=>({id:x.id,title:x.title,name:x.title,poster_path:x.poster,media_type:x.type,_reason:'Fermo da oltre 30 giorni'})),null,'smart');
-  const hist=Object.values(readJSONKey('svx_hist',{})).sort((a,b)=>b.ts-a.ts).slice(0,24);
-  if(hist.length)addSec(el,'Cronologia completa',hist.map(x=>({id:x.id,title:x.title,name:x.title,poster_path:x.poster,media_type:x.type,_anime:x.isAnime?1:0,_reason:x.confidence==='real'?'tempo reale':x.confidence==='manual'?'manuale':'stimato'})),null,'smart');
 }
 
 /* CW */
@@ -667,7 +724,47 @@ function addSecTop10(container,name,items){
 /* SERIE / FILM / ANIME */
 async function loadSerie(){if(loaded.serie)return;loaded.serie=true;buildFilters('filter-serie',TV_GENRES,'serie');const el=document.getElementById('serie-secs');el.innerHTML='<div class="spin-wrap"><div class="spinner"></div></div>';try{const tr=await tmdb('/trending/tv/week');el.innerHTML='';addSec(el,'Serie in tendenza',tr.results.map(x=>({...x,media_type:'tv'})),null,'');tr.results.forEach(x=>{if(x.poster_path)randomPools.serie.push({...x,media_type:'tv'});});for(const p of PROVIDERS){tmdb('/discover/tv',{with_watch_providers:p.id,watch_region:'IT',sort_by:'popularity.desc'}).then(d=>{if(d.results?.length){addSec(el,p.name,d.results.map(x=>({...x,media_type:'tv'})),p.c,'');d.results.forEach(x=>{if(x.poster_path)randomPools.serie.push({...x,media_type:'tv'});});}}).catch(()=>{});}for(const g of TV_GENRES.filter(g=>g.id)){tmdb('/discover/tv',{with_genres:g.id,sort_by:'popularity.desc'}).then(d=>{if(d.results?.length)addSec(el,g.name,d.results.map(x=>({...x,media_type:'tv'})),null,'genre');}).catch(()=>{});};}catch(e){el.innerHTML='<div class="err">Errore.</div>';}}
 async function loadFilm(){if(loaded.film)return;loaded.film=true;buildFilters('filter-film',MV_GENRES,'film');const el=document.getElementById('film-secs');el.innerHTML='<div class="spin-wrap"><div class="spinner"></div></div>';try{const [tr,now,top]=await Promise.all([tmdb('/trending/movie/week'),tmdb('/movie/now_playing',{region:'IT'}),tmdb('/movie/top_rated',{region:'IT'})]);el.innerHTML='';addSec(el,'Film in tendenza',tr.results.map(x=>({...x,media_type:'movie'})),null,'');addSec(el,'Ora al cinema',now.results.map(x=>({...x,media_type:'movie'})),null,'');addSec(el,'I più votati di sempre',top.results.map(x=>({...x,media_type:'movie'})),null,'');tr.results.forEach(x=>{if(x.poster_path)randomPools.film.push({...x,media_type:'movie'});});for(const p of PROVIDERS){tmdb('/discover/movie',{with_watch_providers:p.id,watch_region:'IT',sort_by:'popularity.desc'}).then(d=>{if(d.results?.length){addSec(el,p.name,d.results.map(x=>({...x,media_type:'movie'})),p.c,'');d.results.forEach(x=>{if(x.poster_path)randomPools.film.push({...x,media_type:'movie'});});}}).catch(()=>{});}for(const g of MV_GENRES.filter(g=>g.id)){tmdb('/discover/movie',{with_genres:g.id,sort_by:'popularity.desc'}).then(d=>{if(d.results?.length)addSec(el,g.name,d.results.map(x=>({...x,media_type:'movie'})),null,'genre');}).catch(()=>{});};}catch(e){el.innerHTML='<div class="err">Errore.</div>';}}
-async function loadAnime(){if(loaded.anime)return;loaded.anime=true;const el=document.getElementById('anime-secs');el.innerHTML='<div class="spin-wrap"><div class="spinner"></div></div>';try{const [pop,top,movies,action,romance,isekai]=await Promise.all([tmdb('/discover/tv',{with_genres:'16',sort_by:'popularity.desc',with_origin_country:'JP'}),tmdb('/discover/tv',{with_genres:'16',sort_by:'vote_average.desc',vote_count_gte:'400',with_origin_country:'JP'}),tmdb('/discover/movie',{with_genres:'16',sort_by:'popularity.desc',with_origin_country:'JP'}),tmdb('/discover/tv',{with_genres:'16,28',sort_by:'popularity.desc',with_origin_country:'JP'}),tmdb('/discover/tv',{with_genres:'16,10749',sort_by:'popularity.desc',with_origin_country:'JP'}),tmdb('/search/tv',{query:'isekai',with_origin_country:'JP'})]);el.innerHTML='';const mark=arr=>arr.map(x=>({...x,media_type:x.media_type||'tv',_anime:1}));if(pop.results?.length){addSec(el,'Anime più popolari',mark(pop.results),null,'');pop.results.forEach(x=>{if(x.poster_path)randomPools.anime.push({...x,media_type:'tv',_anime:1});});}if(top.results?.length)addSec(el,'Meglio votati',mark(top.results),null,'');if(action.results?.length)addSec(el,'Azione & Avventura',mark(action.results),null,'genre');if(romance.results?.length)addSec(el,'Romance & Shōjo',mark(romance.results),null,'genre');if(isekai.results?.length)addSec(el,'Isekai',mark(isekai.results),null,'genre');if(movies.results?.length)addSec(el,'Film anime',mark(movies.results.map(x=>({...x,media_type:'movie'}))),null,'');}catch(e){el.innerHTML='<div class="err">Errore.</div>';}}
+async function anilist(section){
+  const query=`query($sort:[MediaSort],$genre:String,$format:MediaFormat){Page(page:1,perPage:22){media(type:ANIME,sort:$sort,genre:$genre,format:$format,isAdult:false){id title{romaji english native} format averageScore popularity episodes startDate{year} coverImage{large} siteUrl}}}`;
+  const res=await fetch('https://graphql.anilist.co',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({query,variables:section})});
+  if(!res.ok)throw Error('AniList error');
+  const json=await res.json();return json.data?.Page?.media||[];
+}
+function animeTitles(a){return [...new Set([a.title?.english,a.title?.romaji,a.title?.native].filter(Boolean))];}
+async function tmdbFromAnime(a,preferMovie=false){
+  for(const q of animeTitles(a)){
+    const searches=preferMovie?[['movie',await tmdb('/search/movie',{query:q,include_adult:false})],['tv',await tmdb('/search/tv',{query:q,include_adult:false})]]:[['tv',await tmdb('/search/tv',{query:q,include_adult:false})],['movie',await tmdb('/search/movie',{query:q,include_adult:false})]];
+    for(const [type,data] of searches){
+      const found=(data.results||[]).find(x=>(x.origin_country||[]).includes('JP')&&x.poster_path)||(data.results||[]).find(x=>x.poster_path);
+      if(found)return {...found,media_type:type,_anime:1,_reason:a.averageScore?`AniList ${a.averageScore}%`:'Catalogo AniList'};
+    }
+  }
+  return null;
+}
+async function animeSection(container,title,vars,preferMovie=false,tag='AniList'){
+  try{
+    const raw=await anilist(vars);
+    const mapped=(await Promise.all(raw.slice(0,14).map(a=>tmdbFromAnime(a,preferMovie)))).filter(Boolean);
+    const unique=[];const seen=new Set();mapped.forEach(x=>{const k=x.media_type+'_'+x.id;if(!seen.has(k)){seen.add(k);unique.push(x);}});
+    if(unique.length){addSec(container,title,unique,null,tag==='Genere'?'genre':'smart');unique.forEach(x=>{if(x.poster_path)randomPools.anime.push(x);});}
+  }catch(e){}
+}
+async function loadAnime(){
+  if(loaded.anime)return;loaded.anime=true;
+  const el=document.getElementById('anime-secs');el.innerHTML='<div class="spin-wrap"><div class="spinner"></div></div>';
+  try{
+    el.innerHTML='<div class="anime-legal-note"><b>Anime rifatto da zero.</b><span>Catalogo da AniList, schede e disponibilità Italia da TMDB. Per guardare in italiano usa le piattaforme indicate o una sorgente episodio valida salvata da te.</span></div>';
+    await Promise.all([
+      animeSection(el,'Anime in trend',{sort:['TRENDING_DESC']}),
+      animeSection(el,'Più popolari',{sort:['POPULARITY_DESC']}),
+      animeSection(el,'Top score',{sort:['SCORE_DESC']}),
+      animeSection(el,'Azione',{sort:['POPULARITY_DESC'],genre:'Action'},false,'Genere'),
+      animeSection(el,'Romance',{sort:['POPULARITY_DESC'],genre:'Romance'},false,'Genere'),
+      animeSection(el,'Film anime',{sort:['POPULARITY_DESC'],format:'MOVIE'},true)
+    ]);
+    if(!el.querySelector('.section'))el.innerHTML+='<div class="empty">Nessun anime trovato. Riprova tra poco.</div>';
+  }catch(e){el.innerHTML='<div class="err">Errore nel caricamento anime.</div>';}
+}
 
 /* RENDER HELPERS */
 function cardProgressHTML(item,type){
@@ -874,8 +971,7 @@ function markSourceOk(){
 function getSourceLabel(src){return [...SOURCES_NORMAL,...SOURCES_ANIME].find(s=>s.id===src)?.label||src;}
 function updateSourceState(msg){
   const el=document.getElementById('player-source-state');if(!el)return;
-  const prog=getProgress(playerProgId,playerProgType,playerProgSeason,playerProgEpisode);
-  const status=msg||(prog?`Progressi: ${progressConfidenceLabel(prog).replace(' · ','')||'non verificati'}`:'Sorgente non verificata');
+  const status=msg||(playerHasRealProgress?'autosave preciso attivo':'in attesa tempo reale dal player');
   el.textContent=`${getSourceLabel(currentSrc)} · ${status}`;
 }
 function applySavedPlayerSandbox(){document.getElementById('vix-frame')?.removeAttribute('sandbox');}
@@ -896,7 +992,7 @@ function promptAnimeLink(){
   buildSrcToggle(true);reloadPlayer(false);showToast('Link anime salvato ✓');
 }
 function buildSrcToggle(isAnime){const sources=getSourceList(isAnime);const toggle=document.getElementById('src-toggle');toggle.innerHTML=sources.map(s=>`<button class="src-btn${s.id===currentSrc?' active':''}" data-src="${s.id}">${s.label}</button>`).join('');toggle.querySelectorAll('.src-btn').forEach(b=>b.addEventListener('click',function(){currentSrc=this.dataset.src;setPreferredSource(currentTvId,playerProgType,playerProgSeason,playerProgEpisode,currentSrc);toggle.querySelectorAll('.src-btn').forEach(x=>x.classList.toggle('active',x.dataset.src===currentSrc));reloadPlayer();}));updateSourceState();}
-function reloadPlayer(saveFirst=true){if(saveFirst)persistEstimatedProgress();clearTimeout(playerSourceHealthTimer);const fr=document.getElementById('vix-frame'),tc=document.getElementById('tv-ctrl');const s=document.getElementById('s-sel').value||1,ep=document.getElementById('e-sel').value||1;applySavedPlayerSandbox();if(tc.style.display!=='none'&&currentTvId){const prog=getProgress(currentTvId,'tv',s,ep);fr.src=getEmbedUrl(currentTvId,'tv',s,ep,currentSrc,prog?prog.secs:0);resetPlayerAutoClock(prog?prog.secs:0);}else if(currentTvId){const prog=getProgress(currentTvId,'movie',null,null);fr.src=getEmbedUrl(currentTvId,'movie',null,null,currentSrc,prog?prog.secs:0);resetPlayerAutoClock(prog?prog.secs:0);}updateSourceState();playerSourceHealthTimer=setTimeout(()=>{if(!playerHasRealProgress)updateSourceState('autosave stimato: il player non comunica il tempo reale');},45000);}
+function reloadPlayer(saveFirst=true){if(saveFirst)requestPlayerRealProgress();clearTimeout(playerSourceHealthTimer);const fr=document.getElementById('vix-frame'),tc=document.getElementById('tv-ctrl');const s=document.getElementById('s-sel').value||1,ep=document.getElementById('e-sel').value||1;applySavedPlayerSandbox();if(tc.style.display!=='none'&&currentTvId){const prog=getProgress(currentTvId,'tv',s,ep);fr.src=getEmbedUrl(currentTvId,'tv',s,ep,currentSrc,prog?prog.secs:0);resetPlayerAutoClock();}else if(currentTvId){const prog=getProgress(currentTvId,'movie',null,null);fr.src=getEmbedUrl(currentTvId,'movie',null,null,currentSrc,prog?prog.secs:0);resetPlayerAutoClock();}updateSourceState();playerSourceHealthTimer=setTimeout(()=>{if(!playerHasRealProgress)updateSourceState('il player non comunica il tempo reale');},45000);}
 function updateDeviceMediaSession(title,type,poster,season,episode){
   if(!('mediaSession' in navigator)||typeof MediaMetadata==='undefined')return;
   try{
@@ -909,7 +1005,7 @@ function updateDeviceMediaSession(title,type,poster,season,episode){
   }catch(e){}
 }
 function updateNextEpisodeButton(){const btn=document.getElementById('btn-next-ep');if(!btn)return;const tv=playerProgType==='tv'&&document.getElementById('player-modal').classList.contains('open');btn.style.display=tv?'inline-flex':'none';btn.classList.remove('next-ready');}
-function loadSelectedTvEpisode(s,ep){if(!currentTvId)return;playerProgSeason=Number(s);playerProgEpisode=Number(ep);currentSrc=getPreferredSource(currentTvId,'tv',s,ep,currentIsAnime,currentSrc);buildSrcToggle(currentIsAnime);refreshNoteBar(currentTvId,'tv',s,ep);const prog=getProgress(currentTvId,'tv',s,ep);applySavedPlayerSandbox();document.getElementById('vix-frame').src=getEmbedUrl(currentTvId,'tv',s,ep,currentSrc,prog?prog.secs:0);resetPlayerAutoClock(prog?prog.secs:0);saveWatching(currentTvId,'tv',playerSessionTitle||document.getElementById('pm-title').textContent,playerSessionPoster,s,ep);updateDeviceMediaSession(playerSessionTitle,'tv',playerSessionPoster,s,ep);refreshCW();updateNextEpisodeButton();updateSourceState();}
+function loadSelectedTvEpisode(s,ep){if(!currentTvId)return;playerProgSeason=Number(s);playerProgEpisode=Number(ep);currentSrc=getPreferredSource(currentTvId,'tv',s,ep,currentIsAnime,currentSrc);buildSrcToggle(currentIsAnime);refreshNoteBar(currentTvId,'tv',s,ep);const prog=getProgress(currentTvId,'tv',s,ep);applySavedPlayerSandbox();document.getElementById('vix-frame').src=getEmbedUrl(currentTvId,'tv',s,ep,currentSrc,prog?prog.secs:0);resetPlayerAutoClock();saveWatching(currentTvId,'tv',playerSessionTitle||document.getElementById('pm-title').textContent,playerSessionPoster,s,ep);updateDeviceMediaSession(playerSessionTitle,'tv',playerSessionPoster,s,ep);refreshCW();updateNextEpisodeButton();updateSourceState();}
 async function goNextEpisode(){
   if(!currentTvId||playerProgType!=='tv')return;
   persistEstimatedProgress();clearTimeout(epChangeTimer);
@@ -1185,7 +1281,7 @@ async function copySportConfig(){
 }
 document.getElementById('btn-sport-refresh')?.addEventListener('click',()=>loadSport(true));
 document.getElementById('btn-sport-copy-config')?.addEventListener('click',copySportConfig);
-document.querySelectorAll('.nav-btn[data-page]').forEach(b=>b.addEventListener('click',()=>{const pg=b.dataset.page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+pg).classList.add('active');document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');if(pg==='sport')loadSport();if(pg==='serie'&&!loaded.serie)loadSerie();if(pg==='film'&&!loaded.film)loadFilm();if(pg==='anime'&&!loaded.anime)loadAnime();if(pg==='novita'&&!loaded.novita)loadNovita();if(pg==='liste')renderListePage();}));
+document.querySelectorAll('.nav-btn[data-page]').forEach(b=>b.addEventListener('click',()=>{const pg=b.dataset.page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+pg).classList.add('active');document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');if(pg==='sport')loadSport();if(pg==='serie'&&!loaded.serie)loadSerie();if(pg==='film'&&!loaded.film)loadFilm();if(pg==='anime'&&!loaded.anime)loadAnime();if(pg==='profilo')loadProfilo();if(pg==='liste')renderListePage();}));
 document.addEventListener('click',e=>{if(e.target.closest('[data-nav-home]')){if(document.getElementById('player-modal').classList.contains('open')){attemptClosePlayer();return;}if(document.getElementById('detail-modal').classList.contains('open'))closeDetail();else if(document.getElementById('actor-modal').classList.contains('open'))closeActor();else navigateHome();}});
 
 /* GLOBAL DELEGATION */
@@ -1206,7 +1302,7 @@ document.addEventListener('keydown',e=>{if(e.target.tagName==='INPUT'||e.target.
 document.getElementById('detail-modal').addEventListener('click',function(e){if(e.target===this)closeDetail();});
 
 loadHome();
-setTimeout(()=>{try{const q=new URLSearchParams(location.search);const page=q.get('page');if(page&&document.querySelector(`.nav-btn[data-page="${page}"]`))document.querySelector(`.nav-btn[data-page="${page}"]`).click();if(q.get('actor'))openActor(q.get('actor'));else if(q.get('id'))openDetail(q.get('id'),q.get('type')||'movie','',q.get('anime')==='1');}catch(e){}},500);
+setTimeout(()=>{try{const q=new URLSearchParams(location.search);let page=q.get('page');if(page==='novita')page='profilo';if(page&&document.querySelector(`.nav-btn[data-page="${page}"]`))document.querySelector(`.nav-btn[data-page="${page}"]`).click();if(q.get('actor'))openActor(q.get('actor'));else if(q.get('id'))openDetail(q.get('id'),q.get('type')||'movie','',q.get('anime')==='1');}catch(e){}},500);
 
 /* ============================================================
    SISTEMA NOTIFICHE — serie seguite + Top 10

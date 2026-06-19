@@ -49,7 +49,7 @@
     <button class="nav-btn" data-page="film">Film</button>
     <button class="nav-btn" data-page="anime">Anime</button>
     <button class="nav-btn" data-page="sport">Sport</button>
-    <button class="nav-btn" data-page="novita">Novità</button>
+    <button class="nav-btn" data-page="profilo">Profilo</button>
     <button class="nav-btn" data-page="liste">Liste</button>
   </div>
   <div class="nav-right">
@@ -153,12 +153,12 @@
       <button class="pm-reminder-exit" id="btn-reminder-exit">Chiudi</button>
     </div>
     <div id="sc-no-stream" style="display:none"><span>⚠️ Canale non disponibile — prova un altro server</span></div>
-    <div class="anime-note" id="anime-note" style="display:none"><b>Anime ITA</b>: gli anime usano un link episodio salvabile da te. Apri l’episodio, incolla il link del player una volta sola, poi StreaMGN lo ricorda.</div>
+    <div class="anime-note" id="anime-note" style="display:none"><b>Anime</b>: catalogo rifatto con fonti anime dedicate. Per la riproduzione usa una sorgente episodio valida o le piattaforme disponibili nella scheda.</div>
     <div class="tv-controls" id="tv-ctrl">
       <div class="ctrl-group"><span class="ctrl-label">Stagione</span><select class="gsel" id="s-sel" style="min-width:165px"></select></div>
       <div class="ctrl-group"><span class="ctrl-label">Episodio</span><select class="gsel" id="e-sel" style="min-width:210px"></select><span class="ctrl-hint">Cambia e il player si aggiorna automaticamente</span></div>
     </div>
-    <div class="pm-note-bar" id="pm-note-bar">
+    <div class="pm-note-bar" id="pm-note-bar" hidden>
       <div class="pm-note-resume-row" id="pm-note-resume-row" style="display:none">
         <span class="pm-note-resume-lbl">📍 Salvato: <b id="pm-note-saved-display">—</b></span>
         <button class="pm-resume-btn" id="btn-note-resume">▶ Riprendi da qui</button>
@@ -236,7 +236,7 @@
   <div id="page-serie" class="page"><div class="pg-header"><span class="pg-title">Serie TV</span><button class="random-btn" data-random="serie">🎲 Scegli per me</button></div><div class="filter-bar" id="filter-serie"></div><div class="sections-wrap" id="serie-secs"></div></div>
   <div id="page-film" class="page"><div class="pg-header"><span class="pg-title">Film</span><button class="random-btn" data-random="film">🎲 Scegli per me</button></div><div class="filter-bar" id="filter-film"></div><div class="sections-wrap" id="film-secs"></div></div>
   <div id="page-anime" class="page"><div class="pg-header"><span class="pg-title">Anime</span><button class="random-btn" data-random="anime">🎲 Scegli per me</button></div><div class="sections-wrap" id="anime-secs"></div></div>
-  <div id="page-novita" class="page"><div class="pg-header"><span class="pg-title">Novità</span><button class="random-btn" id="btn-smart-random">🎯 Random intelligente</button></div><div class="sections-wrap" id="novita-secs"></div></div>
+  <div id="page-profilo" class="page"><div class="profile-wrap" id="profile-wrap"><div class="spin-wrap"><div class="spinner"></div></div></div></div>
   <div id="page-liste" class="page"><div class="pg-header"><span class="pg-title">Le mie liste</span></div><div class="liste-create-row"><button class="gbtn" id="btn-new-list">Nuova lista</button><button class="gbtn" id="btn-export-lists">📤 Esporta liste</button><button class="gbtn" id="btn-backup-all">💾 Backup completo</button><button class="gbtn" id="btn-import-lists">📥 Importa</button><button class="gbtn gbtn-red" id="btn-clean-lists">Ripristina liste</button><select class="gsel" id="liste-sort"><option value="recent">Aggiunti di recente</option><option value="title">Titolo</option><option value="rating">Voto</option><option value="progress">Progresso</option></select></div><div class="liste-filter-bar" id="liste-filter-bar"><button class="list-filter-btn active" data-list-filter="all">Tutto</button><button class="list-filter-btn" data-list-filter="started">Iniziati</button><button class="list-filter-btn" data-list-filter="completed">Completati</button><button class="list-filter-btn" data-list-filter="queued">Da vedere</button></div><div id="liste-body"></div></div>
 </main>
 
