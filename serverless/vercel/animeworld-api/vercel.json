@@ -1,0 +1,25 @@
+{
+  "functions": {
+    "api/play.py": {
+      "maxDuration": 30
+    }
+  },
+  "routes": [
+    {
+      "src": "/play",
+      "dest": "/api/play.py"
+    },
+    {
+      "src": "/stream",
+      "dest": "/api/play.py"
+    },
+    {
+      "src": "/find",
+      "dest": "/api/play.py"
+    },
+    {
+      "src": "/search",
+      "dest": "/api/play.py"
+    }
+  ]
+}

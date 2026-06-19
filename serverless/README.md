@@ -76,4 +76,6 @@ streamApiBase: 'https://api.streamgn.it'
 
 - `animeworld` usa AnimeWorld direttamente o un wrapper compatibile con `ANIMEWORLD_API_BASE`.
 - `tadako` richiede un piccolo servizio wrapper Node/TypeScript, configurabile con `TADAKO_API_BASE`.
+- Il frontend invia sempre `title`, eventuali `titles` alternativi, `id`, `season` ed `episode`.
+- Un wrapper AnimeWorld/Tadako compatibile puo esporre `GET /play`, `GET /stream`, `GET /find` o `GET /search` e deve rispondere con `embedUrl`, `iframeUrl`, `url` o `streamUrl`.
 - Il frontend non deve cambiare se in futuro sostituisci AnimeWorld, Tadako o Sport.

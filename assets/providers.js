@@ -43,17 +43,25 @@
       headers:data?.headers||null
     };
   }
+  function timeoutSignal(ms=7000){
+    if(typeof AbortController==='undefined')return {};
+    const controller=new AbortController();
+    setTimeout(()=>controller.abort(),ms);
+    return {signal:controller.signal};
+  }
   async function callBackend(kind,params,fallbackUrl){
     if(!API_BASE)return null;
     const route=ROUTES[kind];if(!route)return null;
     const path=fillRoute(route,params);
     const qs=new URLSearchParams();
     Object.entries(params).forEach(([key,value])=>{
-      if(value!==undefined&&value!==null&&value!=='')qs.set(key,String(value));
+      if(value===undefined||value===null||value==='')return;
+      if(Array.isArray(value))value.filter(Boolean).forEach(v=>qs.append(key,String(v)));
+      else qs.set(key,String(value));
     });
     const url=`${API_BASE}${path}${qs.size?'?'+qs.toString():''}`;
     try{
-      const r=await fetch(url,{cache:'no-store'});
+      const r=await fetch(url,{cache:'no-store',...timeoutSignal(10000)});
       if(!r.ok)return null;
       return cleanResult(await r.json(),fallbackUrl);
     }catch(e){return null;}
@@ -98,6 +106,14 @@
     data[contentKey(id,type,season,episode)]=normalizeAnimeUrl(url);
     writeJSON(DATA_KEY,data);
   }
+  function animeTitleCandidates(params){
+    return [...new Set([
+      params?.title,
+      ...(Array.isArray(params?.titles)?params.titles:[]),
+      params?.originalTitle,
+      params?.originalName
+    ].map(x=>String(x||'').trim()).filter(Boolean))];
+  }
   function extractAnimeWorldLink(data){
     const q=[data],seen=new Set();
     while(q.length){
@@ -118,24 +134,38 @@
     }
     return '';
   }
-  async function findAnimeWorld(title){
-    const q=String(title||'').trim();if(!q)return '';
-    if(ANIMEWORLD_API_BASE){
-      for(const endpoint of [
-        `${ANIMEWORLD_API_BASE}/find?keyword=${encodeURIComponent(q)}`,
-        `${ANIMEWORLD_API_BASE}/search?keyword=${encodeURIComponent(q)}`,
-        `${ANIMEWORLD_API_BASE}/api/search?keyword=${encodeURIComponent(q)}`
-      ]){
-        try{
-          const r=await fetch(endpoint,{cache:'no-store'});
-          if(r.ok){const found=extractAnimeWorldLink(await r.json());if(found)return found;}
-        }catch(e){}
-      }
-    }
+  async function tryAnimeWrapper(endpoint){
     try{
-      const r=await fetch(`${ANIMEWORLD_BASE}/api/search/v2?keyword=${encodeURIComponent(q)}`,{method:'POST',cache:'no-store'});
+      const r=await fetch(endpoint,{cache:'no-store',headers:{accept:'application/json'},...timeoutSignal(8000)});
       if(r.ok){const found=extractAnimeWorldLink(await r.json());if(found)return found;}
     }catch(e){}
+    return '';
+  }
+  async function findAnimeWorld(params){
+    const titles=animeTitleCandidates(params);
+    if(!titles.length)return '';
+    const season=params?.season||1,episode=params?.episode||1,id=params?.id||params?.tmdbId||'';
+    if(ANIMEWORLD_API_BASE){
+      for(const title of titles){
+        const qs=new URLSearchParams({title,keyword:title,q:title,id:String(id),season:String(season),episode:String(episode)});
+        for(const endpoint of [
+          `${ANIMEWORLD_API_BASE}/play?${qs.toString()}`,
+          `${ANIMEWORLD_API_BASE}/stream?${qs.toString()}`,
+          `${ANIMEWORLD_API_BASE}/find?${qs.toString()}`,
+          `${ANIMEWORLD_API_BASE}/search?${qs.toString()}`,
+          `${ANIMEWORLD_API_BASE}/api/search?${qs.toString()}`
+        ]){
+          const found=await tryAnimeWrapper(endpoint);
+          if(found)return found;
+        }
+      }
+    }
+    for(const title of titles){
+      try{
+        const r=await fetch(`${ANIMEWORLD_BASE}/api/search/v2?keyword=${encodeURIComponent(title)}`,{method:'POST',cache:'no-store',...timeoutSignal(5000)});
+        if(r.ok){const found=extractAnimeWorldLink(await r.json());if(found)return found;}
+      }catch(e){}
+    }
     return '';
   }
   function fallbackBySource(kind,params){
@@ -167,7 +197,7 @@
     if(backend)return backend;
     const saved=getAnimeOverride(params.id,params.type||'tv',params.season,params.episode);
     if(saved)return {ok:true,provider:'manual',embedUrl:saved};
-    const found=await findAnimeWorld(params.title);
+    const found=await findAnimeWorld(params);
     if(found){
       setAnimeOverride(params.id,params.type||'tv',params.season,params.episode,found);
       return {ok:true,provider:'animeworld',embedUrl:found};
@@ -179,7 +209,7 @@
     return await callBackend('sport',params,fallback)||{ok:true,provider:'configured',embedUrl:fallback};
   }
   function getAnimeFallbackUrl(params){
-    return getAnimeOverride(params.id,params.type||'tv',params.season,params.episode)||animeSearchUrl(params.title);
+    return getAnimeOverride(params.id,params.type||'tv',params.season,params.episode)||animeSearchUrl(animeTitleCandidates(params)[0]);
   }
 
   window.StreamGNProviders={

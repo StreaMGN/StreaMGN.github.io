@@ -12,6 +12,7 @@ let activeFilterGenre={serie:null,film:null},currentTrailerKey=null,epChangeTime
 let playerProgId=null,playerProgType=null,playerProgSeason=null,playerProgEpisode=null,playerNoteSavedThisSession=false;
 let playerSessionTitle='',playerSessionPoster='',playerSessionIsAnime=false,playerLastAutoSecs=0,playerLastAutoSaveAt=0,playerAutoSaveTimer=null,playerHasRealProgress=false,playerSourceHealthTimer=null;
 let playerStreamSeq=0;
+let playerSessionAnimeTitles=[],currentDetailAnimeTitles=[];
 let profileStatsCache=null;
 const SOURCE_LABELS={vixsrc:'VixSrc',vidsrc:'VidSrc',embed:'Embed.su',anime:'AnimeWorld',animeworld:'AnimeWorld',tadako:'Tadako'};
 function sourceListFromConfig(kind,fallback){return (CONFIG.streamUiSources?.[kind]||fallback).map(id=>({id,label:SOURCE_LABELS[id]||id}));}
@@ -28,6 +29,37 @@ const GROUPS=[{id:'watching',label:'👁️ Che sto guardando'},{id:'lista',labe
 const DATA_KEYS=['svx_f','svx_w','svx_prog','svx_r','svx_sh','svx_notif','svx_notif_asked','svx_s','svx_sport_url','svx_src_pref','svx_src_bad','svx_ep_seen','svx_hist','svx_tmdb_cache','svx_anime_links'];
 const storageMemory={};
 let idbDb=null,idbHydrated=false;
+
+function uniqueTextList(items){
+  return [...new Set((items||[]).map(x=>String(x||'').trim()).filter(Boolean))];
+}
+function itemGenres(item){
+  return [...(item?.genre_ids||[]),...(item?.genres||[]).map(g=>g?.id??g)].map(String);
+}
+function itemCountries(item){
+  return [
+    ...(Array.isArray(item?.origin_country)?item.origin_country:[]),
+    ...(item?.production_countries||[]).map(c=>c?.iso_3166_1)
+  ].filter(Boolean).map(String);
+}
+function isAnimeLike(item){
+  if(!item)return false;
+  if(item._anime||item.isAnime)return true;
+  const genres=itemGenres(item),countries=itemCountries(item),lang=String(item.original_language||'').toLowerCase();
+  return genres.includes('16')&&(lang==='ja'||countries.includes('JP'));
+}
+function animeTitleCandidates(info,title=''){
+  return uniqueTextList([
+    title,
+    info?.title,
+    info?.name,
+    info?.original_title,
+    info?.original_name
+  ]);
+}
+function withAnimeFlag(item){
+  return item?{...item,_anime:isAnimeLike(item)?1:(item._anime?1:0)}:item;
+}
 
 function migrateLegacyScopedData(){
   try{
@@ -540,7 +572,7 @@ function getEmbedUrl(id,type,season,episode,src,startSecs){
 async function resolveStreamUrl(id,type,season,episode,src,startSecs){
   const s=season||1,e=episode||1,fallback=getEmbedUrl(id,type,s,e,src,startSecs),providers=window.StreamGNProviders;
   if(!providers)return fallback;
-  const payload={id:String(id),tmdbId:String(id),type,season:s,episode:e,title:playerSessionTitle,poster:playerSessionPoster,provider:src,source:src,startSecs,settings:loadSettings(),fallbackUrl:fallback};
+  const payload={id:String(id),tmdbId:String(id),type,season:s,episode:e,title:playerSessionTitle,titles:playerSessionAnimeTitles,poster:playerSessionPoster,provider:src,source:src,startSecs,settings:loadSettings(),fallbackUrl:fallback};
   try{
     const result=(currentIsAnime||src==='anime'||src==='animeworld')
       ? await providers.getAnimeStream(payload)
@@ -725,7 +757,7 @@ function buildCWRow(row,items){
     <div class="cw-thumb">${thumb}${progBadge}<div class="cw-play-over"><div class="cw-play-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="rgba(255,255,255,.9)"><path d="M5 3l14 9-14 9z"/></svg></div></div></div>
     <div class="cw-prog"><div class="cw-bar" style="width:${barPct}%"></div></div>
     <div class="cw-info"><div class="cw-title">${item.title}</div><div class="cw-sub">${sub}</div></div>`;
-    d.addEventListener('click',function(e){if(e.target.closest('.cw-remove'))return;openDetail(item.id,item.type,item.poster||'',false);});
+    d.addEventListener('click',function(e){if(e.target.closest('.cw-remove'))return;openDetail(item.id,item.type,item.poster||'',!!item.isAnime);});
     row.appendChild(d);
   });drag(row);
 }
@@ -744,7 +776,7 @@ function renderHero(idx){
 /* TOP 10 */
 function addSecTop10(container,name,items){
   if(!items?.length)return;const sec=document.createElement('div');sec.className='section';
-  const cards=items.map((item,i)=>{const title=item.title||item.name||'',type=item.media_type||'movie',poster=item.poster_path||'',score=item.vote_average?'★ '+item.vote_average.toFixed(1):'';const img=poster?`<img src="${IMG}${poster}" alt="${ea(title)}" loading="lazy">`:`<div class="no-poster">${title}</div>`;return `<div class="card" data-id="${item.id}" data-type="${type}" data-title="${ea(title)}" data-poster="${poster}" data-anime="0">${img}<div class="card-top10">${i+1}</div><div class="card-ov"><div class="card-ov-title">${title}</div><div class="card-ov-sub">${score||'ⓘ Dettagli'}</div></div><div class="card-bm${isInAnyFolder(item.id)?' saved':''}" data-bm-id="${item.id}" data-bm-type="${type}" data-bm-title="${ea(title)}" data-bm-poster="${poster}" data-bm-anime="0"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></div></div>`;}).join('');
+  const cards=items.map((raw,i)=>{const item=withAnimeFlag(raw),title=item.title||item.name||'',type=item.media_type||'movie',poster=item.poster_path||'',score=item.vote_average?'★ '+item.vote_average.toFixed(1):'',anime=item._anime?1:0;const img=poster?`<img src="${IMG}${poster}" alt="${ea(title)}" loading="lazy">`:`<div class="no-poster">${title}</div>`;return `<div class="card" data-id="${item.id}" data-type="${type}" data-title="${ea(title)}" data-poster="${poster}" data-anime="${anime}">${img}<div class="card-top10">${i+1}</div><div class="card-ov"><div class="card-ov-title">${title}</div><div class="card-ov-sub">${score||'ⓘ Dettagli'}</div></div><div class="card-bm${isInAnyFolder(item.id)?' saved':''}" data-bm-id="${item.id}" data-bm-type="${type}" data-bm-title="${ea(title)}" data-bm-poster="${poster}" data-bm-anime="${anime}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></div></div>`;}).join('');
   sec.innerHTML=`<div class="section-head"><span class="section-name">${name}</span><span class="gtag">Top 10</span></div><div class="row">${cards}</div>`;
   container.appendChild(sec);drag(sec.querySelector('.row'));
 }
@@ -791,7 +823,7 @@ function cardProgressHTML(item,type){
   return `<div class="card-progress-badge">📍 ${prog.text}${progressConfidenceLabel(prog)}</div>${pct?`<div class="card-progress-line"><span style="width:${pct}%"></span></div>`:''}`;
 }
 function addSec(container,name,items,color,type){if(!items?.length)return;const sec=document.createElement('div');sec.className='section';const dot=color?`<span class="pip" style="background:${color}"></span>`:'';const gt=type==='genre'?`<span class="gtag">Genere</span>`:type==='smart'?`<span class="gtag">Smart</span>`:'';sec.innerHTML=`<div class="section-head">${dot}<span class="section-name">${name}</span>${gt}</div><div class="row">${items.map(cardHTML).join('')}</div>`;container.appendChild(sec);drag(sec.querySelector('.row'));}
-function cardHTML(item){const title=item.title||item.name||'',type=item.media_type||'movie',poster=item.poster_path||item.poster||'',score=item.vote_average?'★ '+item.vote_average.toFixed(1):'';const inLib=isInAnyFolder(item.id),anime=item._anime?1:0,rated=getRating(item.id),progress=cardProgressHTML(item,type);const img=poster?`<img src="${IMG}${poster}" alt="${ea(title)}" loading="lazy">`:`<div class="no-poster">${title}</div>`;return `<div class="card" data-id="${item.id}" data-type="${type}" data-title="${ea(title)}" data-poster="${poster}" data-anime="${anime}">${img}${rated?`<div class="card-rated visible">⭐ ${rated}/5</div>`:`<div class="card-rated">⭐ ${rated}/5</div>`}${progress}<div class="card-ov"><div class="card-ov-title">${title}</div><div class="card-ov-sub">${score||'ⓘ Dettagli'}</div></div><div class="card-bm${inLib?' saved':''}" data-bm-id="${item.id}" data-bm-type="${type}" data-bm-title="${ea(title)}" data-bm-poster="${poster}" data-bm-anime="${anime}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></div></div>`;}
+function cardHTML(item){item=withAnimeFlag(item);const title=item.title||item.name||'',type=item.media_type||'movie',poster=item.poster_path||item.poster||'',score=item.vote_average?'★ '+item.vote_average.toFixed(1):'';const inLib=isInAnyFolder(item.id),anime=item._anime?1:0,rated=getRating(item.id),progress=cardProgressHTML(item,type);const img=poster?`<img src="${IMG}${poster}" alt="${ea(title)}" loading="lazy">`:`<div class="no-poster">${title}</div>`;return `<div class="card" data-id="${item.id}" data-type="${type}" data-title="${ea(title)}" data-poster="${poster}" data-anime="${anime}">${img}${rated?`<div class="card-rated visible">⭐ ${rated}/5</div>`:`<div class="card-rated">⭐ ${rated}/5</div>`}${progress}<div class="card-ov"><div class="card-ov-title">${title}</div><div class="card-ov-sub">${score||'ⓘ Dettagli'}</div></div><div class="card-bm${inLib?' saved':''}" data-bm-id="${item.id}" data-bm-type="${type}" data-bm-title="${ea(title)}" data-bm-poster="${poster}" data-bm-anime="${anime}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></div></div>`;}
 function listCardHTML(item,folderId){const title=item.title||'',type=item.type||'movie',poster=item.poster||'',anime=item.isAnime?1:0,progress=cardProgressHTML(item,type);const img=poster?`<img src="${IMG}${poster}" alt="${ea(title)}" loading="lazy">`:`<div class="no-poster">${ea(title)}</div>`;const score=getRating(item.id);return `<div class="card" data-id="${item.id}" data-type="${type}" data-title="${ea(title)}" data-poster="${poster}" data-anime="${anime}">${img}<button class="card-rm-item" data-rm-from="${folderId}" data-rm-id="${item.id}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>${score?`<div class="card-rated visible">⭐ ${score}/5</div>`:''}${progress}<div class="card-ov"><div class="card-ov-title">${ea(title)}</div><div class="card-ov-sub">ⓘ Dettagli</div></div></div>`;}
 function psCardHTML(p){const known=(p.known_for||[]).map(k=>k.title||k.name).filter(Boolean).slice(0,2).join(', ');const photo=p.profile_path?`<img src="${FACE}${p.profile_path}" class="pscard-photo" loading="lazy" alt="${ea(p.name)}">`:`<div class="pscard-photo pscard-nophoto">👤</div>`;return `<div class="pscard" data-actor-id="${p.id}">${photo}<div class="pscard-name">${ea(p.name)}</div>${known?`<div class="pscard-known">${ea(known)}</div>`:''}</div>`;}
 function starRatingHTML(id){const cur=getRating(id);return `<div class="dm-rating-row"><div class="dm-rating-label">La tua valutazione</div><div class="star-row">${[1,2,3,4,5].map(n=>`<button class="star-btn${n<=cur?' active':''}" data-star="${n}" data-rid="${id}">★</button>`).join('')}</div></div>`;}
@@ -832,7 +864,7 @@ async function loadSeasonCast(tvId,season){
 
 /* DETAIL */
 async function openDetail(id,type,poster,isAnime){
-  currentDetailId=String(id);currentDetailType=type;currentDetailIsAnime=!!isAnime;currentDetailPoster=poster||'';currentDetailSeasons=[];hideTrailer();
+  currentDetailId=String(id);currentDetailType=type;currentDetailIsAnime=!!isAnime;currentDetailPoster=poster||'';currentDetailSeasons=[];currentDetailAnimeTitles=[];hideTrailer();
   const bd=document.getElementById('dm-backdrop'),bdy=document.getElementById('dm-body');
   bd.style.backgroundImage=poster?`url('${IMG_W}${poster}')`:''
   bdy.innerHTML='<div class="spin-wrap"><div class="spinner"></div></div>';
@@ -840,6 +872,9 @@ async function openDetail(id,type,poster,isAnime){
   try{
     const [info,credits,providers,trailerKey]=await Promise.all([tmdb(`/${type}/${id}`),tmdb(`/${type}/${id}/${type==='tv'?'aggregate_credits':'credits'}`),tmdb(`/${type}/${id}/watch/providers`),getTrailer(id,type,type==='tv'?1:null)]);
     currentDetailTitle=info.title||info.name||'';currentDetailPoster=info.poster_path||poster||'';currentTrailerKey=trailerKey;
+    isAnime=!!isAnime||isAnimeLike({...info,media_type:type});
+    currentDetailIsAnime=!!isAnime;
+    currentDetailAnimeTitles=isAnime?animeTitleCandidates(info,currentDetailTitle):[];
     if(info.backdrop_path)bd.style.backgroundImage=`url('${BIG}${info.backdrop_path}')`;
     const title=currentDetailTitle,year=(info.release_date||info.first_air_date||'').slice(0,4),runtime=type==='movie'?fmtMin(info.runtime):null,score=info.vote_average?info.vote_average.toFixed(1):'';
     const genres=(info.genres||[]).map(g=>`<span class="genre-pill">${g.name}</span>`).join('');
@@ -1030,15 +1065,16 @@ document.getElementById('btn-src-bad').addEventListener('click',markSourceBad);
 document.getElementById('btn-anime-link').addEventListener('click',promptAnimeLink);
 async function openPlayer(id,type,title,poster,season,episode,isAnime){
   const last=getLastWatched(id),initialS=season||last?.season||1,initialE=episode||last?.episode||1;
-  currentIsAnime=!!isAnime;currentSrc=getPreferredSource(id,type,initialS,initialE,!!isAnime,isAnime?'anime':'vixsrc');currentTvId=String(id);document.getElementById('pm-title').textContent=title;document.getElementById('anime-note').style.display='none';document.getElementById('btn-anime-link').style.display=isAnime?'inline-flex':'none';buildSrcToggle(isAnime);autoAddToWatching({id:String(id),type,title,poster:poster||'',isAnime:!!isAnime});
-  playerProgId=String(id);playerProgType=type;playerProgSeason=season||null;playerProgEpisode=episode||null;playerNoteSavedThisSession=true;playerSessionTitle=title;playerSessionPoster=poster||'';playerSessionIsAnime=!!isAnime;playerLastAutoSecs=0;playerLastAutoSaveAt=0;stopPlayerAutoSave(false);hideReminderOverlay();document.getElementById('pm-note-bar').classList.remove('highlight');updateDeviceMediaSession(title,type,poster,season,episode);
+  const resolvedAnime=!!isAnime||(currentDetailId===String(id)&&currentDetailIsAnime);
+  currentIsAnime=resolvedAnime;currentSrc=getPreferredSource(id,type,initialS,initialE,resolvedAnime,resolvedAnime?'anime':'vixsrc');currentTvId=String(id);document.getElementById('pm-title').textContent=title;document.getElementById('anime-note').style.display='none';document.getElementById('btn-anime-link').style.display='none';buildSrcToggle(resolvedAnime);autoAddToWatching({id:String(id),type,title,poster:poster||'',isAnime:resolvedAnime});
+  playerProgId=String(id);playerProgType=type;playerProgSeason=season||null;playerProgEpisode=episode||null;playerNoteSavedThisSession=true;playerSessionTitle=title;playerSessionPoster=poster||'';playerSessionIsAnime=resolvedAnime;playerSessionAnimeTitles=resolvedAnime?uniqueTextList([title,...(currentDetailId===String(id)?currentDetailAnimeTitles:[])]):[];playerLastAutoSecs=0;playerLastAutoSaveAt=0;stopPlayerAutoSave(false);hideReminderOverlay();document.getElementById('pm-note-bar').classList.remove('highlight');updateDeviceMediaSession(title,type,poster,season,episode);
   const tc=document.getElementById('tv-ctrl'),fr=document.getElementById('vix-frame');
-  if(type==='tv'){tc.style.display='flex';const sSel=document.getElementById('s-sel'),eSel=document.getElementById('e-sel');sSel.innerHTML='<option>Caricamento…</option>';eSel.innerHTML='<option>Caricamento…</option>';document.getElementById('player-modal').classList.add('open');document.body.style.overflow='hidden';const lastS=initialS,lastE=initialE;try{const show=await tmdb(`/tv/${id}`);const seasons=(show.seasons||[]).filter(s=>s.season_number>0);if(!seasons.length)seasons.push({season_number:1,episode_count:10,name:'Stagione 1'});sSel.innerHTML=seasons.map(s=>`<option value="${s.season_number}">S${s.season_number} · ${s.name||'Stagione '+s.season_number} (${s.episode_count||'?'} ep.)</option>`).join('');sSel.value=String(lastS);await loadEpisodesForPlayer(id,sSel.value,lastE);}catch(e){sSel.innerHTML='<option value="1">Stagione 1</option>';eSel.innerHTML='<option value="1">Episodio 1</option>';}const s=sSel.value||1,ep=document.getElementById('e-sel').value||1;playerProgSeason=Number(s);playerProgEpisode=Number(ep);currentSrc=getPreferredSource(id,type,s,ep,!!isAnime,currentSrc);buildSrcToggle(isAnime);refreshNoteBar(id,type,s,ep);const prog=getProgress(id,type,s,ep);applySavedPlayerSandbox();setPlayerFrameSrc(id,type,s,ep,currentSrc,prog?prog.secs:0);startPlayerAutoSave(prog?prog.secs:0);saveWatching(id,type,title,poster,s,ep);updateNextEpisodeButton();updateSourceState();}
+  if(type==='tv'){tc.style.display='flex';const sSel=document.getElementById('s-sel'),eSel=document.getElementById('e-sel');sSel.innerHTML='<option>Caricamento…</option>';eSel.innerHTML='<option>Caricamento…</option>';document.getElementById('player-modal').classList.add('open');document.body.style.overflow='hidden';const lastS=initialS,lastE=initialE;try{const show=await tmdb(`/tv/${id}`);if(resolvedAnime)playerSessionAnimeTitles=uniqueTextList([...playerSessionAnimeTitles,...animeTitleCandidates(show,title)]);const seasons=(show.seasons||[]).filter(s=>s.season_number>0);if(!seasons.length)seasons.push({season_number:1,episode_count:10,name:'Stagione 1'});sSel.innerHTML=seasons.map(s=>`<option value="${s.season_number}">S${s.season_number} · ${s.name||'Stagione '+s.season_number} (${s.episode_count||'?'} ep.)</option>`).join('');sSel.value=String(lastS);await loadEpisodesForPlayer(id,sSel.value,lastE);}catch(e){sSel.innerHTML='<option value="1">Stagione 1</option>';eSel.innerHTML='<option value="1">Episodio 1</option>';}const s=sSel.value||1,ep=document.getElementById('e-sel').value||1;playerProgSeason=Number(s);playerProgEpisode=Number(ep);currentSrc=getPreferredSource(id,type,s,ep,resolvedAnime,currentSrc);buildSrcToggle(resolvedAnime);refreshNoteBar(id,type,s,ep);const prog=getProgress(id,type,s,ep);applySavedPlayerSandbox();setPlayerFrameSrc(id,type,s,ep,currentSrc,prog?prog.secs:0);startPlayerAutoSave(prog?prog.secs:0);saveWatching(id,type,title,poster,s,ep);updateNextEpisodeButton();updateSourceState();}
   else{tc.style.display='none';playerProgSeason=null;playerProgEpisode=null;refreshNoteBar(id,type,null,null);const prog=getProgress(id,type,null,null);applySavedPlayerSandbox();setPlayerFrameSrc(id,type,null,null,currentSrc,prog?prog.secs:0);startPlayerAutoSave(prog?prog.secs:0);document.getElementById('player-modal').classList.add('open');document.body.style.overflow='hidden';saveWatching(id,type,title,poster,null,null);updateNextEpisodeButton();updateSourceState();}
   refreshCW();
 }
 async function loadEpisodesForPlayer(showId,season,preselect){const eSel=document.getElementById('e-sel');eSel.innerHTML='<option>Caricamento…</option>';try{const data=await tmdb(`/tv/${showId}/season/${season}`);const eps=data.episodes||[];if(!eps.length)throw Error('empty');eSel.innerHTML=eps.map(e=>`<option value="${e.episode_number}">Ep. ${e.episode_number}${e.name?' · '+e.name:''}</option>`).join('');if(preselect)eSel.value=String(preselect);}catch(e){eSel.innerHTML='<option value="1">Episodio 1</option>';}}
-function doClosePlayer(){pipActive=false;clearTimeout(epChangeTimer);clearTimeout(playerSourceHealthTimer);stopPlayerAutoSave(true);hideReminderOverlay();const fr=document.getElementById('vix-frame');smoothClose(document.getElementById('player-modal'),180,()=>{fr.src='';document.body.style.overflow='';document.getElementById('anime-note').style.display='none';document.getElementById('btn-anime-link').style.display='none';currentTvId=null;playerProgId=null;playerSessionTitle='';playerSessionPoster='';playerSessionIsAnime=false;refreshCW();});}
+function doClosePlayer(){pipActive=false;clearTimeout(epChangeTimer);clearTimeout(playerSourceHealthTimer);stopPlayerAutoSave(true);hideReminderOverlay();const fr=document.getElementById('vix-frame');smoothClose(document.getElementById('player-modal'),180,()=>{fr.src='';document.body.style.overflow='';document.getElementById('anime-note').style.display='none';document.getElementById('btn-anime-link').style.display='none';currentTvId=null;playerProgId=null;playerSessionTitle='';playerSessionPoster='';playerSessionIsAnime=false;playerSessionAnimeTitles=[];refreshCW();});}
 function attemptClosePlayer(){hideReminderOverlay();doClosePlayer();}
 function closePlayer(){attemptClosePlayer();}
 document.getElementById('btn-player-back').addEventListener('click',attemptClosePlayer);
@@ -1208,7 +1244,7 @@ async function runSearch(q){
   const wantsContent=filters.type!=='person';
   const [multi,people]=await Promise.all([wantsContent?tmdb('/search/multi',{query:q}):Promise.resolve({results:[]}),wantsPeople?tmdb('/search/person',{query:q}):Promise.resolve({results:[]})]);
   let contents=(multi.results||[]).filter(x=>x.media_type!=='person'&&(x.poster_path||x.title||x.name));
-  contents=(await Promise.all(contents.slice(0,28).map(async x=>await passesSearchFilters(x,filters)?x:null))).filter(Boolean);
+  contents=(await Promise.all(contents.slice(0,28).map(async x=>await passesSearchFilters(x,filters)?withAnimeFlag(x):null))).filter(Boolean);
   const persons=(people.results||[]).filter(x=>x.profile_path||x.known_for?.length).sort((a,b)=>(b.popularity||0)-(a.popularity||0)).slice(0,14);
   peopleBox.innerHTML=persons.length?`<div class="search-sec-hdr">Persone</div><div class="pscard-row">${persons.map(psCardHTML).join('')}</div>`:'';
   grid.innerHTML=contents.length?`${persons.length?'<div class="search-sec-hdr">Film e Serie</div>':''}${contents.map(x=>cardHTML(x)).join('')}`:'';

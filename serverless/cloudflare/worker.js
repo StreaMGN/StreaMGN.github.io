@@ -38,6 +38,12 @@ function addResume(params,startSecs){
     params.set('t',String(Math.round(secs)));
   }
 }
+function uniqueTextList(items){
+  return [...new Set((items||[]).map(x=>String(x||'').trim()).filter(Boolean))];
+}
+function animeTitleCandidates(ctx){
+  return uniqueTextList([ctx.title,...(ctx.titles||[]),ctx.originalTitle,ctx.originalName]);
+}
 function vixsrcMovie({id,startSecs,lang='it',subs='none'}){
   const params=new URLSearchParams();
   if(lang&&lang!=='original')params.set('hl',lang);
@@ -96,32 +102,46 @@ function extractAnimeWorldLink(base,data){
 }
 async function animeWorldProvider(ctx,env){
   const base=String(env.ANIMEWORLD_BASE_URL||DEFAULTS.animeWorldBaseUrl).replace(/\/$/,'');
-  const title=String(ctx.title||ctx.query||'').trim();
-  if(!title)throw new Error('missing anime title');
+  const titles=animeTitleCandidates(ctx);
+  if(!titles.length)throw new Error('missing anime title');
   const apiBase=String(env.ANIMEWORLD_API_BASE||'').replace(/\/$/,'');
   if(apiBase){
-    for(const endpoint of [`${apiBase}/find?keyword=${encodeURIComponent(title)}`,`${apiBase}/search?keyword=${encodeURIComponent(title)}`,`${apiBase}/api/search?keyword=${encodeURIComponent(title)}`]){
-      try{
-        const res=await fetch(endpoint,{headers:{accept:'application/json'}});
-        if(res.ok){
-          const found=extractAnimeWorldLink(base,await res.json());
-          if(found)return {provider:'animeworld',embedUrl:found};
-        }
-      }catch(e){}
+    for(const title of titles){
+      const qs=new URLSearchParams({
+        title,
+        keyword:title,
+        q:title,
+        id:String(ctx.id||''),
+        season:String(ctx.season||1),
+        episode:String(ctx.episode||1)
+      });
+      for(const endpoint of [`${apiBase}/play?${qs.toString()}`,`${apiBase}/stream?${qs.toString()}`,`${apiBase}/find?${qs.toString()}`,`${apiBase}/search?${qs.toString()}`,`${apiBase}/api/search?${qs.toString()}`]){
+        try{
+          const res=await fetch(endpoint,{headers:{accept:'application/json'}});
+          if(res.ok){
+            const found=extractAnimeWorldLink(base,await res.json());
+            if(found)return {provider:'animeworld',embedUrl:found};
+          }
+        }catch(e){}
+      }
     }
   }
-  const res=await fetch(`${base}/api/search/v2?keyword=${encodeURIComponent(title)}`,{method:'POST',headers:{accept:'application/json'}});
-  if(res.ok){
-    const found=extractAnimeWorldLink(base,await res.json());
-    if(found)return {provider:'animeworld',embedUrl:found};
+  for(const title of titles){
+    try{
+      const res=await fetch(`${base}/api/search/v2?keyword=${encodeURIComponent(title)}`,{method:'POST',headers:{accept:'application/json'}});
+      if(res.ok){
+        const found=extractAnimeWorldLink(base,await res.json());
+        if(found)return {provider:'animeworld',embedUrl:found};
+      }
+    }catch(e){}
   }
-  return {provider:'animeworld',embedUrl:`${base}/archive?keyword=${encodeURIComponent(title)}`};
+  return {provider:'animeworld',embedUrl:`${base}/archive?keyword=${encodeURIComponent(titles[0])}`};
 }
 async function tadakoProvider(ctx,env){
   const base=String(env.TADAKO_API_BASE||'').replace(/\/$/,'');
   if(!base)throw new Error('tadako api not configured');
   const params=new URLSearchParams({
-    title:String(ctx.title||''),
+    title:String(animeTitleCandidates(ctx)[0]||ctx.title||''),
     id:String(ctx.id||''),
     season:String(ctx.season||1),
     episode:String(ctx.episode||1)
@@ -158,6 +178,9 @@ async function handlePlay(request,env){
     season:parts[3]||url.searchParams.get('season')||1,
     episode:parts[4]||url.searchParams.get('episode')||1,
     title:url.searchParams.get('title')||'',
+    titles:uniqueTextList([...url.searchParams.getAll('titles'),String(url.searchParams.get('titles')||'').split(',')].flat()),
+    originalTitle:url.searchParams.get('originalTitle')||'',
+    originalName:url.searchParams.get('originalName')||'',
     startSecs:url.searchParams.get('startSecs')||url.searchParams.get('t')||0,
     lang:url.searchParams.get('lang')||'it',
     subs:url.searchParams.get('subs')||'none',
