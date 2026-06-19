@@ -12,6 +12,23 @@ window.STREAMGN_CONFIG = {
   sportDefaultUrl: 'https://pepperstream.xyz/index.php',
   remoteConfigUrl: 'assets/remote-config.json',
   sportAdminEditUrl: 'https://github.com/StreaMGN/StreaMGN.github.io/edit/main/assets/remote-config.json',
+  streamApiBase: '',
+  streamRoutes: {
+    movie: '/play/movie/:id',
+    tv: '/play/tv/:id/:season/:episode',
+    anime: '/play/anime/:id',
+    sport: '/sport/live'
+  },
+  streamProviders: {
+    movie: ['vixsrc'],
+    tv: ['vixsrc'],
+    anime: ['animeworld', 'tadako'],
+    sport: ['configured']
+  },
+  streamUiSources: {
+    normal: ['vixsrc', 'vidsrc', 'embed'],
+    anime: ['anime']
+  },
   animeWorldBaseUrl: 'https://www.animeworld.ac',
   animeWorldApiBase: '',
   tmdbCacheMaxAge: 6 * 60 * 60 * 1000,

@@ -6,8 +6,8 @@ const DB_NAME='streamgn-db';
 const STORE='kv';
 const INTERVAL=6*60*60*1000;
 
-self.addEventListener('install',event=>{self.skipWaiting();event.waitUntil(caches.open('streamgn-v7').then(cache=>cache.addAll(['./','./index.html','./assets/styles.css','./assets/config.js','./assets/app.js','./assets/remote-config.json','./assets/streamgn-logo.png','./manifest.webmanifest']).catch(()=>{})));});
-self.addEventListener('activate',event=>{event.waitUntil(Promise.all([self.clients.claim(),caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('streamgn-')&&k!=='streamgn-v7').map(k=>caches.delete(k))))]));});
+self.addEventListener('install',event=>{self.skipWaiting();event.waitUntil(caches.open('streamgn-v8').then(cache=>cache.addAll(['./','./index.html','./assets/styles.css','./assets/config.js','./assets/providers.js','./assets/app.js','./assets/remote-config.json','./assets/streamgn-logo.png','./manifest.webmanifest']).catch(()=>{})));});
+self.addEventListener('activate',event=>{event.waitUntil(Promise.all([self.clients.claim(),caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('streamgn-')&&k!=='streamgn-v8').map(k=>caches.delete(k))))]));});
 self.addEventListener('fetch',event=>{if(event.request.method!=='GET')return;event.respondWith(fetch(event.request).catch(()=>caches.match(event.request)));});
 
 function openDB(){
