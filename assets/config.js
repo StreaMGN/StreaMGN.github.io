@@ -12,6 +12,8 @@ window.STREAMGN_CONFIG = {
   sportDefaultUrl: 'https://pepperstream.xyz/index.php',
   remoteConfigUrl: 'assets/remote-config.json',
   sportAdminEditUrl: 'https://github.com/StreaMGN/StreaMGN.github.io/edit/main/assets/remote-config.json',
+  animeWorldBaseUrl: 'https://www.animeworld.ac',
+  animeWorldApiBase: '',
   tmdbCacheMaxAge: 6 * 60 * 60 * 1000,
   tmdbCacheMaxItems: 260,
   notificationInterval: 6 * 60 * 60 * 1000

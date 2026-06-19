@@ -45,12 +45,12 @@
   <div id="nav-logo"></div>
   <div class="nav-scroll">
     <button class="nav-btn active" data-page="home">Home</button>
-    <button class="nav-btn" data-page="serie">Serie TV</button>
     <button class="nav-btn" data-page="film">Film</button>
+    <button class="nav-btn" data-page="serie">Serie</button>
     <button class="nav-btn" data-page="anime">Anime</button>
     <button class="nav-btn" data-page="sport">Sport</button>
-    <button class="nav-btn" data-page="profilo">Profilo</button>
     <button class="nav-btn" data-page="liste">Liste</button>
+    <button class="nav-btn" data-page="profilo">Profilo</button>
   </div>
   <div class="nav-right">
     <select class="theme-select" id="theme-select" title="Tema">
@@ -153,7 +153,7 @@
       <button class="pm-reminder-exit" id="btn-reminder-exit">Chiudi</button>
     </div>
     <div id="sc-no-stream" style="display:none"><span>⚠️ Canale non disponibile — prova un altro server</span></div>
-    <div class="anime-note" id="anime-note" style="display:none"><b>Anime</b>: catalogo rifatto con fonti anime dedicate. Per la riproduzione usa una sorgente episodio valida o le piattaforme disponibili nella scheda.</div>
+    <div class="anime-note" id="anime-note" style="display:none"></div>
     <div class="tv-controls" id="tv-ctrl">
       <div class="ctrl-group"><span class="ctrl-label">Stagione</span><select class="gsel" id="s-sel" style="min-width:165px"></select></div>
       <div class="ctrl-group"><span class="ctrl-label">Episodio</span><select class="gsel" id="e-sel" style="min-width:210px"></select><span class="ctrl-hint">Cambia e il player si aggiorna automaticamente</span></div>
@@ -171,7 +171,7 @@
       </div>
     </div>
     <div class="player-tools" id="player-tools">
-      <button class="gbtn" id="btn-anime-link" style="display:none">Imposta link episodio</button>
+      <button class="gbtn" id="btn-anime-link" style="display:none">AnimeWorld</button>
       <span class="player-source-state" id="player-source-state">Sorgente non verificata</span>
     </div>
     <div class="player-box"><iframe id="vix-frame" allow="autoplay; fullscreen; picture-in-picture; encrypted-media; airplay" allowfullscreen playsinline webkit-playsinline referrerpolicy="no-referrer"></iframe></div>

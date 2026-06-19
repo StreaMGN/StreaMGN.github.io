@@ -13,7 +13,9 @@ let playerProgId=null,playerProgType=null,playerProgSeason=null,playerProgEpisod
 let playerSessionTitle='',playerSessionPoster='',playerSessionIsAnime=false,playerLastAutoSecs=0,playerLastAutoSaveAt=0,playerAutoSaveTimer=null,playerHasRealProgress=false,playerSourceHealthTimer=null;
 let profileStatsCache=null;
 const SOURCES_NORMAL=[{id:'vixsrc',label:'VixSrc'},{id:'vidsrc',label:'VidSrc'},{id:'embed',label:'Embed.su'}];
-const SOURCES_ANIME=[{id:'anime-custom',label:'Episodio ITA'},{id:'vixsrc',label:'VixSrc'},{id:'vidsrc',label:'VidSrc'},{id:'embed',label:'Embed.su'}];
+const ANIMEWORLD_BASE=String(CONFIG.animeWorldBaseUrl||'https://www.animeworld.ac').replace(/\/$/,'');
+const ANIMEWORLD_API_BASE=String(CONFIG.animeWorldApiBase||'').replace(/\/$/,'');
+const SOURCES_ANIME=[{id:'animeworld',label:'AnimeWorld'}];
 const SPORT_DEFAULT_URL=CONFIG.sportDefaultUrl||'https://pepperstream.xyz/index.php';
 const REMOTE_CONFIG_URL=CONFIG.remoteConfigUrl||'assets/remote-config.json';
 const SPORT_ADMIN_EDIT_URL=CONFIG.sportAdminEditUrl||'https://github.com/StreaMGN/StreaMGN.github.io/edit/main/assets/remote-config.json';
@@ -230,7 +232,7 @@ function saveProgressNote(id,type,season,episode,text,secs){
   try{const p=getProgressStore();p[progKey(id,type,season,episode)]={text,secs,confidence:'manual',manual:true,ts:Date.now()};const ks=Object.keys(p).sort((a,b)=>(p[b].ts||0)-(p[a].ts||0));if(ks.length>300)ks.slice(300).forEach(k=>delete p[k]);saveProgressStore(p);recordHistory(id,type,playerSessionTitle,playerSessionPoster,season,episode,secs,'manual');}catch(e){}
 }
 function fmtProgressSecs(secs){secs=Math.max(0,Math.floor(Number(secs)||0));const h=Math.floor(secs/3600),m=Math.floor((secs%3600)/60),s=secs%60;return h?`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${m}:${String(s).padStart(2,'0')}`;}
-function progressConfidenceLabel(prog){if(!prog)return'';if(prog.confidence==='real'||prog.real)return' · preciso';if(prog.confidence==='manual'||prog.manual)return' · manuale';return'';}
+function progressConfidenceLabel(){return '';}
 function trimProgressStore(p){const ks=Object.keys(p).sort((a,b)=>(p[b].ts||0)-(p[a].ts||0));if(ks.length>300)ks.slice(300).forEach(k=>delete p[k]);}
 function saveProgressAuto(id,type,season,episode,secs,duration,confidence='real'){
   secs=Math.floor(Number(secs)||0);duration=Math.floor(Number(duration)||0);
@@ -315,7 +317,7 @@ function stopPlayerAutoSave(saveFirst=true){
 function parseTimeInput(s){if(!s)return 0;s=String(s).trim();const pts=s.split(':').map(p=>parseInt(p)||0);if(pts.length===3)return pts[0]*3600+pts[1]*60+pts[2];if(pts.length===2)return pts[0]*60+pts[1];const n=parseInt(s);return isNaN(n)?0:n*60;}
 function refreshNoteBar(id,type,season,episode){
   const prog=getProgress(id,type,season,episode),rr=document.getElementById('pm-note-resume-row'),sep=document.getElementById('pm-note-sep'),disp=document.getElementById('pm-note-saved-display'),inp=document.getElementById('pm-note-inp');
-  if(prog&&prog.text){disp.textContent=prog.text+progressConfidenceLabel(prog);rr.style.display='flex';sep.style.display='block';inp.value=prog.text;}
+  if(prog&&prog.text){disp.textContent=prog.text;rr.style.display='flex';sep.style.display='block';inp.value=prog.text;}
   else{rr.style.display='none';sep.style.display='none';inp.value='';}
 }
 document.getElementById('btn-note-save').addEventListener('click',function(){
@@ -338,7 +340,7 @@ document.getElementById('btn-note-resume').addEventListener('click',function(){
 function trustedPlayerOrigin(origin){
   try{
     const host=new URL(origin).hostname;
-    return host==='vixsrc.to'||host.endsWith('.vixsrc.to')||host==='vidsrc.me'||host.endsWith('.vidsrc.me')||host==='vidsrc.xyz'||host.endsWith('.vidsrc.xyz')||host==='embed.su'||host.endsWith('.embed.su');
+    return host==='vixsrc.to'||host.endsWith('.vixsrc.to')||host==='vidsrc.me'||host.endsWith('.vidsrc.me')||host==='vidsrc.xyz'||host.endsWith('.vidsrc.xyz')||host==='embed.su'||host.endsWith('.embed.su')||host==='animeworld.ac'||host.endsWith('.animeworld.ac');
   }catch(e){return false;}
 }
 function parsePlayerPayload(data){
@@ -517,13 +519,9 @@ document.getElementById('import-modal').addEventListener('click',e=>{if(e.target
 function addResumeParams(params,startSecs){if(startSecs&&startSecs>10){const v=Math.round(startSecs);params.push(`startAt=${v}`);params.push(`t=${v}`);}}
 function getEmbedUrl(id,type,season,episode,src,startSecs){
   const s=season||1,e=episode||1;
-  if(src==='anime-custom'){
-    const custom=getAnimeCustomUrl(id,type,s,e);
-    if(custom)return custom;
-    setTimeout(()=>showToast('Imposta il link per questo episodio anime'),80);
-    return 'about:blank';
+  if(src==='animeworld'){
+    return getAnimeWorldUrl(id,type,s,e)||animeWorldSearchUrl(playerSessionTitle);
   }
-  /* VixSrc forzato italiano — stesso player pulito, audio ITA se disponibile */
   if(src==='vixsrc-it'){
     const url=type==='tv'?`https://vixsrc.to/tv/${id}/${s}/${e}`:`https://vixsrc.to/movie/${id}`;
     const params=['hl=it','sl=it'];
@@ -625,8 +623,8 @@ function profileStatsHTML(stats){
     <div class="profile-hero-content">
       <div class="profile-kicker">StreaMGN Replay</div>
       <h1>Il tuo profilo visione</h1>
-      <p>Statistiche, gusti e contenuti recenti raccolti dalle tue liste e dai progressi precisi salvati.</p>
-      <button class="gbtn gbtn-white" id="btn-profile-share">Condividi JPEG</button>
+      <p>Statistiche, gusti e contenuti recenti raccolti dalle tue liste e dai progressi salvati.</p>
+      <button class="gbtn gbtn-white" id="btn-profile-share">Condividi</button>
     </div>
   </section>
   <section class="profile-section">
@@ -658,23 +656,30 @@ function wrapCanvasText(ctx,text,x,y,maxWidth,lineHeight,maxLines=3){const words
 async function shareProfileWrapped(){
   const stats=profileStatsCache||await computeProfileStats(),canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');
   canvas.width=1080;canvas.height=1350;
-  const grad=ctx.createLinearGradient(0,0,1080,1350);grad.addColorStop(0,'#050505');grad.addColorStop(.55,'#151515');grad.addColorStop(1,'#0a84ff');ctx.fillStyle=grad;ctx.fillRect(0,0,1080,1350);
-  const imgs=await Promise.all(stats.covers.slice(0,10).map(p=>loadCanvasImage(`${IMG_W}${p}`)));
-  imgs.filter(Boolean).forEach((img,i)=>{const x=620+(i%3)*138,y=90+Math.floor(i/3)*206;ctx.save();ctx.globalAlpha=.38;drawRoundRect(ctx,x,y,120,180,18);ctx.clip();ctx.drawImage(img,x,y,120,180);ctx.restore();});
-  ctx.fillStyle='rgba(255,255,255,.08)';drawRoundRect(ctx,70,70,940,1210,36);ctx.fill();
-  ctx.fillStyle='#fff';ctx.font='800 42px -apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif';ctx.fillText('StreaMGN Replay',110,150);
-  ctx.font='900 78px -apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif';wrapCanvasText(ctx,'Il mio profilo visione',110,255,620,86,2);
-  ctx.font='700 34px -apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif';ctx.fillStyle='rgba(255,255,255,.74)';ctx.fillText(`Totale: ${hLabel(stats.totalMinutes)}`,110,430);
-  const boxes=[['Film',hLabel(stats.filmMinutes)],['Serie',hLabel(stats.seriesMinutes)],['Episodi',String(stats.episodesSeen)],['Liste',String(stats.listed)]];
-  boxes.forEach((b,i)=>{const x=110+(i%2)*330,y=520+Math.floor(i/2)*170;ctx.fillStyle='rgba(255,255,255,.12)';drawRoundRect(ctx,x,y,290,126,24);ctx.fill();ctx.fillStyle='#fff';ctx.font='900 42px -apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif';ctx.fillText(b[1],x+26,y+55);ctx.fillStyle='rgba(255,255,255,.62)';ctx.font='700 24px -apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif';ctx.fillText(b[0],x+26,y+92);});
-  ctx.fillStyle='#fff';ctx.font='800 30px -apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif';ctx.fillText('Generi top',110,920);
-  ctx.font='700 27px -apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif';ctx.fillStyle='rgba(255,255,255,.78)';wrapCanvasText(ctx,(stats.genres.map(g=>g.name).join(' · ')||'Ancora in costruzione'),110,970,760,42,3);
-  ctx.font='700 24px -apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif';ctx.fillStyle='rgba(255,255,255,.58)';ctx.fillText('Creato con StreaMGN',110,1210);
+  const grad=ctx.createLinearGradient(0,0,1080,1350);grad.addColorStop(0,'#050505');grad.addColorStop(.44,'#101114');grad.addColorStop(1,'#0a84ff');ctx.fillStyle=grad;ctx.fillRect(0,0,1080,1350);
+  const imgs=await Promise.all(stats.covers.slice(0,14).map(p=>loadCanvasImage(`${IMG_W}${p}`)));
+  imgs.filter(Boolean).forEach((img,i)=>{
+    const x=610+(i%4)*104,y=82+Math.floor(i/4)*166,rot=((i%2)?1:-1)*(3+i%3);
+    ctx.save();ctx.translate(x+44,y+66);ctx.rotate(rot*Math.PI/180);ctx.globalAlpha=.44;drawRoundRect(ctx,-46,-68,92,138,16);ctx.clip();ctx.drawImage(img,-46,-68,92,138);ctx.restore();
+  });
+  const glow=ctx.createRadialGradient(860,1030,30,860,1030,520);glow.addColorStop(0,'rgba(10,132,255,.34)');glow.addColorStop(1,'rgba(10,132,255,0)');ctx.fillStyle=glow;ctx.fillRect(0,0,1080,1350);
+  ctx.fillStyle='rgba(255,255,255,.09)';drawRoundRect(ctx,58,58,964,1234,42);ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.18)';ctx.lineWidth=2;drawRoundRect(ctx,58,58,964,1234,42);ctx.stroke();
+  ctx.fillStyle='rgba(255,255,255,.72)';ctx.font='800 28px -apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif';ctx.fillText('StreaMGN REPLAY',96,136);
+  ctx.fillStyle='#fff';ctx.font='900 96px -apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif';wrapCanvasText(ctx,'Il mio profilo visione',96,262,640,98,2);
+  ctx.font='900 112px -apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif';ctx.fillText(hLabel(stats.totalMinutes),96,500);
+  ctx.font='800 30px -apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif';ctx.fillStyle='rgba(255,255,255,.66)';ctx.fillText('ore e minuti totali',100,545);
+  const boxes=[['Film',hLabel(stats.filmMinutes)],['Serie',hLabel(stats.seriesMinutes)],['Episodi',String(stats.episodesSeen)],['Giorni attivi',String(stats.days)]];
+  boxes.forEach((b,i)=>{const x=96+(i%2)*342,y=632+Math.floor(i/2)*172;ctx.fillStyle='rgba(255,255,255,.13)';drawRoundRect(ctx,x,y,300,130,26);ctx.fill();ctx.strokeStyle='rgba(255,255,255,.13)';ctx.lineWidth=1;drawRoundRect(ctx,x,y,300,130,26);ctx.stroke();ctx.fillStyle='#fff';ctx.font='900 44px -apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif';ctx.fillText(b[1],x+26,y+58);ctx.fillStyle='rgba(255,255,255,.62)';ctx.font='800 24px -apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif';ctx.fillText(b[0],x+26,y+96);});
+  const genres=stats.genres.map(g=>g.name).slice(0,4);
+  ctx.fillStyle='#fff';ctx.font='900 34px -apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif';ctx.fillText('I miei generi',96,1030);
+  genres.forEach((g,i)=>{const x=96+(i%2)*300,y=1070+Math.floor(i/2)*62;ctx.fillStyle='rgba(255,255,255,.14)';drawRoundRect(ctx,x,y,260,42,21);ctx.fill();ctx.fillStyle='rgba(255,255,255,.86)';ctx.font='800 22px -apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif';ctx.fillText(g,x+20,y+28);});
+  ctx.font='800 24px -apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif';ctx.fillStyle='rgba(255,255,255,.58)';ctx.fillText('Creato con StreaMGN',96,1216);
   canvas.toBlob(async blob=>{
     if(!blob)return;
     const file=new File([blob],'streamgn-replay.jpg',{type:'image/jpeg'});
     try{if(navigator.canShare?.({files:[file]})){await navigator.share({title:'Il mio StreaMGN Replay',files:[file]});return;}}catch(e){}
-    const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='streamgn-replay.jpg';a.click();URL.revokeObjectURL(url);showToast('Replay JPEG creato ✓');
+    const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='streamgn-replay.jpg';a.click();URL.revokeObjectURL(url);showToast('Replay creato ✓');
   },'image/jpeg',.92);
 }
 function moodPickerHTML(){return `<div class="mood-row"><button class="mood-chip" data-mood="light">Leggero</button><button class="mood-chip" data-mood="thriller">Thriller</button><button class="mood-chip" data-mood="short">Da 20 minuti</button><button class="mood-chip" data-mood="movie">Filmone</button></div><div id="mood-results"></div>`;}
@@ -685,7 +690,7 @@ async function loadMood(mood){
 }
 
 /* CW */
-function renderCW(container,items){const old=document.getElementById('cw-section');if(old)old.remove();const sec=document.createElement('div');sec.className='section';sec.id='cw-section';sec.innerHTML=`<div class="section-head"><span class="section-name">Continua a guardare</span><span class="gtag">Auto-save</span></div><div class="row" id="cw-row"></div>`;container.insertBefore(sec,container.firstChild);buildCWRow(sec.querySelector('#cw-row'),items);}
+function renderCW(container,items){const old=document.getElementById('cw-section');if(old)old.remove();const sec=document.createElement('div');sec.className='section';sec.id='cw-section';sec.innerHTML=`<div class="section-head"><span class="section-name">Continua a guardare</span></div><div class="row" id="cw-row"></div>`;container.insertBefore(sec,container.firstChild);buildCWRow(sec.querySelector('#cw-row'),items);}
 function buildCWRow(row,items){
   row.innerHTML='';
   items.forEach(item=>{
@@ -724,43 +729,29 @@ function addSecTop10(container,name,items){
 /* SERIE / FILM / ANIME */
 async function loadSerie(){if(loaded.serie)return;loaded.serie=true;buildFilters('filter-serie',TV_GENRES,'serie');const el=document.getElementById('serie-secs');el.innerHTML='<div class="spin-wrap"><div class="spinner"></div></div>';try{const tr=await tmdb('/trending/tv/week');el.innerHTML='';addSec(el,'Serie in tendenza',tr.results.map(x=>({...x,media_type:'tv'})),null,'');tr.results.forEach(x=>{if(x.poster_path)randomPools.serie.push({...x,media_type:'tv'});});for(const p of PROVIDERS){tmdb('/discover/tv',{with_watch_providers:p.id,watch_region:'IT',sort_by:'popularity.desc'}).then(d=>{if(d.results?.length){addSec(el,p.name,d.results.map(x=>({...x,media_type:'tv'})),p.c,'');d.results.forEach(x=>{if(x.poster_path)randomPools.serie.push({...x,media_type:'tv'});});}}).catch(()=>{});}for(const g of TV_GENRES.filter(g=>g.id)){tmdb('/discover/tv',{with_genres:g.id,sort_by:'popularity.desc'}).then(d=>{if(d.results?.length)addSec(el,g.name,d.results.map(x=>({...x,media_type:'tv'})),null,'genre');}).catch(()=>{});};}catch(e){el.innerHTML='<div class="err">Errore.</div>';}}
 async function loadFilm(){if(loaded.film)return;loaded.film=true;buildFilters('filter-film',MV_GENRES,'film');const el=document.getElementById('film-secs');el.innerHTML='<div class="spin-wrap"><div class="spinner"></div></div>';try{const [tr,now,top]=await Promise.all([tmdb('/trending/movie/week'),tmdb('/movie/now_playing',{region:'IT'}),tmdb('/movie/top_rated',{region:'IT'})]);el.innerHTML='';addSec(el,'Film in tendenza',tr.results.map(x=>({...x,media_type:'movie'})),null,'');addSec(el,'Ora al cinema',now.results.map(x=>({...x,media_type:'movie'})),null,'');addSec(el,'I più votati di sempre',top.results.map(x=>({...x,media_type:'movie'})),null,'');tr.results.forEach(x=>{if(x.poster_path)randomPools.film.push({...x,media_type:'movie'});});for(const p of PROVIDERS){tmdb('/discover/movie',{with_watch_providers:p.id,watch_region:'IT',sort_by:'popularity.desc'}).then(d=>{if(d.results?.length){addSec(el,p.name,d.results.map(x=>({...x,media_type:'movie'})),p.c,'');d.results.forEach(x=>{if(x.poster_path)randomPools.film.push({...x,media_type:'movie'});});}}).catch(()=>{});}for(const g of MV_GENRES.filter(g=>g.id)){tmdb('/discover/movie',{with_genres:g.id,sort_by:'popularity.desc'}).then(d=>{if(d.results?.length)addSec(el,g.name,d.results.map(x=>({...x,media_type:'movie'})),null,'genre');}).catch(()=>{});};}catch(e){el.innerHTML='<div class="err">Errore.</div>';}}
-async function anilist(section){
-  const query=`query($sort:[MediaSort],$genre:String,$format:MediaFormat){Page(page:1,perPage:22){media(type:ANIME,sort:$sort,genre:$genre,format:$format,isAdult:false){id title{romaji english native} format averageScore popularity episodes startDate{year} coverImage{large} siteUrl}}}`;
-  const res=await fetch('https://graphql.anilist.co',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({query,variables:section})});
-  if(!res.ok)throw Error('AniList error');
-  const json=await res.json();return json.data?.Page?.media||[];
-}
-function animeTitles(a){return [...new Set([a.title?.english,a.title?.romaji,a.title?.native].filter(Boolean))];}
-async function tmdbFromAnime(a,preferMovie=false){
-  for(const q of animeTitles(a)){
-    const searches=preferMovie?[['movie',await tmdb('/search/movie',{query:q,include_adult:false})],['tv',await tmdb('/search/tv',{query:q,include_adult:false})]]:[['tv',await tmdb('/search/tv',{query:q,include_adult:false})],['movie',await tmdb('/search/movie',{query:q,include_adult:false})]];
-    for(const [type,data] of searches){
-      const found=(data.results||[]).find(x=>(x.origin_country||[]).includes('JP')&&x.poster_path)||(data.results||[]).find(x=>x.poster_path);
-      if(found)return {...found,media_type:type,_anime:1,_reason:a.averageScore?`AniList ${a.averageScore}%`:'Catalogo AniList'};
-    }
-  }
-  return null;
-}
-async function animeSection(container,title,vars,preferMovie=false,tag='AniList'){
+async function animeSection(container,title,path,params,type='tv',tag=''){
   try{
-    const raw=await anilist(vars);
-    const mapped=(await Promise.all(raw.slice(0,14).map(a=>tmdbFromAnime(a,preferMovie)))).filter(Boolean);
-    const unique=[];const seen=new Set();mapped.forEach(x=>{const k=x.media_type+'_'+x.id;if(!seen.has(k)){seen.add(k);unique.push(x);}});
-    if(unique.length){addSec(container,title,unique,null,tag==='Genere'?'genre':'smart');unique.forEach(x=>{if(x.poster_path)randomPools.anime.push(x);});}
+    const data=await tmdb(path,{include_adult:false,sort_by:'popularity.desc',...params});
+    const unique=[];const seen=new Set();
+    (data.results||[]).filter(x=>x.poster_path).forEach(x=>{
+      const item={...x,media_type:type,_anime:1},key=`${type}_${x.id}`;
+      if(!seen.has(key)){seen.add(key);unique.push(item);}
+    });
+    if(unique.length){addSec(container,title,unique,null,tag);unique.forEach(x=>randomPools.anime.push(x));}
   }catch(e){}
 }
 async function loadAnime(){
   if(loaded.anime)return;loaded.anime=true;
   const el=document.getElementById('anime-secs');el.innerHTML='<div class="spin-wrap"><div class="spinner"></div></div>';
   try{
-    el.innerHTML='<div class="anime-legal-note"><b>Anime rifatto da zero.</b><span>Catalogo da AniList, schede e disponibilità Italia da TMDB. Per guardare in italiano usa le piattaforme indicate o una sorgente episodio valida salvata da te.</span></div>';
+    el.innerHTML='';
     await Promise.all([
-      animeSection(el,'Anime in trend',{sort:['TRENDING_DESC']}),
-      animeSection(el,'Più popolari',{sort:['POPULARITY_DESC']}),
-      animeSection(el,'Top score',{sort:['SCORE_DESC']}),
-      animeSection(el,'Azione',{sort:['POPULARITY_DESC'],genre:'Action'},false,'Genere'),
-      animeSection(el,'Romance',{sort:['POPULARITY_DESC'],genre:'Romance'},false,'Genere'),
-      animeSection(el,'Film anime',{sort:['POPULARITY_DESC'],format:'MOVIE'},true)
+      animeSection(el,'Anime in tendenza','/discover/tv',{with_genres:16,with_origin_country:'JP',vote_count_gte:80},'tv'),
+      animeSection(el,'Serie anime popolari','/discover/tv',{with_genres:16,with_origin_country:'JP',vote_average_gte:7},'tv'),
+      animeSection(el,'Film anime','/discover/movie',{with_genres:16,with_original_language:'ja',vote_count_gte:40},'movie'),
+      animeSection(el,'Azione anime','/discover/tv',{with_genres:16,with_keywords:210024,with_origin_country:'JP'},'tv','genre'),
+      animeSection(el,'Romance anime','/discover/tv',{with_genres:16,with_keywords:9840,with_origin_country:'JP'},'tv','genre'),
+      animeSection(el,'Anime recenti','/discover/tv',{with_genres:16,with_origin_country:'JP',first_air_date_gte:'2024-01-01'},'tv')
     ]);
     if(!el.querySelector('.section'))el.innerHTML+='<div class="empty">Nessun anime trovato. Riprova tra poco.</div>';
   }catch(e){el.innerHTML='<div class="err">Errore nel caricamento anime.</div>';}
@@ -777,7 +768,7 @@ function cardProgressHTML(item,type){
   return `<div class="card-progress-badge">📍 ${prog.text}${progressConfidenceLabel(prog)}</div>${pct?`<div class="card-progress-line"><span style="width:${pct}%"></span></div>`:''}`;
 }
 function addSec(container,name,items,color,type){if(!items?.length)return;const sec=document.createElement('div');sec.className='section';const dot=color?`<span class="pip" style="background:${color}"></span>`:'';const gt=type==='genre'?`<span class="gtag">Genere</span>`:type==='smart'?`<span class="gtag">Smart</span>`:'';sec.innerHTML=`<div class="section-head">${dot}<span class="section-name">${name}</span>${gt}</div><div class="row">${items.map(cardHTML).join('')}</div>`;container.appendChild(sec);drag(sec.querySelector('.row'));}
-function cardHTML(item){const title=item.title||item.name||'',type=item.media_type||'movie',poster=item.poster_path||item.poster||'',score=item.vote_average?'★ '+item.vote_average.toFixed(1):'';const inLib=isInAnyFolder(item.id),anime=item._anime?1:0,rated=getRating(item.id),progress=cardProgressHTML(item,type),reason=item._reason?`<div class="reason-badge">${ea(item._reason)}</div>`:'';const img=poster?`<img src="${IMG}${poster}" alt="${ea(title)}" loading="lazy">`:`<div class="no-poster">${title}</div>`;return `<div class="card" data-id="${item.id}" data-type="${type}" data-title="${ea(title)}" data-poster="${poster}" data-anime="${anime}">${img}${reason}${rated?`<div class="card-rated visible">⭐ ${rated}/5</div>`:`<div class="card-rated">⭐ ${rated}/5</div>`}${progress}<div class="card-ov"><div class="card-ov-title">${title}</div><div class="card-ov-sub">${score||'ⓘ Dettagli'}</div></div><div class="card-bm${inLib?' saved':''}" data-bm-id="${item.id}" data-bm-type="${type}" data-bm-title="${ea(title)}" data-bm-poster="${poster}" data-bm-anime="${anime}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></div></div>`;}
+function cardHTML(item){const title=item.title||item.name||'',type=item.media_type||'movie',poster=item.poster_path||item.poster||'',score=item.vote_average?'★ '+item.vote_average.toFixed(1):'';const inLib=isInAnyFolder(item.id),anime=item._anime?1:0,rated=getRating(item.id),progress=cardProgressHTML(item,type);const img=poster?`<img src="${IMG}${poster}" alt="${ea(title)}" loading="lazy">`:`<div class="no-poster">${title}</div>`;return `<div class="card" data-id="${item.id}" data-type="${type}" data-title="${ea(title)}" data-poster="${poster}" data-anime="${anime}">${img}${rated?`<div class="card-rated visible">⭐ ${rated}/5</div>`:`<div class="card-rated">⭐ ${rated}/5</div>`}${progress}<div class="card-ov"><div class="card-ov-title">${title}</div><div class="card-ov-sub">${score||'ⓘ Dettagli'}</div></div><div class="card-bm${inLib?' saved':''}" data-bm-id="${item.id}" data-bm-type="${type}" data-bm-title="${ea(title)}" data-bm-poster="${poster}" data-bm-anime="${anime}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></div></div>`;}
 function listCardHTML(item,folderId){const title=item.title||'',type=item.type||'movie',poster=item.poster||'',anime=item.isAnime?1:0,progress=cardProgressHTML(item,type);const img=poster?`<img src="${IMG}${poster}" alt="${ea(title)}" loading="lazy">`:`<div class="no-poster">${ea(title)}</div>`;const score=getRating(item.id);return `<div class="card" data-id="${item.id}" data-type="${type}" data-title="${ea(title)}" data-poster="${poster}" data-anime="${anime}">${img}<button class="card-rm-item" data-rm-from="${folderId}" data-rm-id="${item.id}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>${score?`<div class="card-rated visible">⭐ ${score}/5</div>`:''}${progress}<div class="card-ov"><div class="card-ov-title">${ea(title)}</div><div class="card-ov-sub">ⓘ Dettagli</div></div></div>`;}
 function psCardHTML(p){const known=(p.known_for||[]).map(k=>k.title||k.name).filter(Boolean).slice(0,2).join(', ');const photo=p.profile_path?`<img src="${FACE}${p.profile_path}" class="pscard-photo" loading="lazy" alt="${ea(p.name)}">`:`<div class="pscard-photo pscard-nophoto">👤</div>`;return `<div class="pscard" data-actor-id="${p.id}">${photo}<div class="pscard-name">${ea(p.name)}</div>${known?`<div class="pscard-known">${ea(known)}</div>`:''}</div>`;}
 function starRatingHTML(id){const cur=getRating(id);return `<div class="dm-rating-row"><div class="dm-rating-label">La tua valutazione</div><div class="star-row">${[1,2,3,4,5].map(n=>`<button class="star-btn${n<=cur?' active':''}" data-star="${n}" data-rid="${id}">★</button>`).join('')}</div></div>`;}
@@ -965,34 +956,92 @@ function markSourceOk(){
   const key=sourceContentKey(currentTvId,playerProgType,playerProgSeason,playerProgEpisode),bad=getBadSources();
   if(bad[key]?.[currentSrc]){delete bad[key][currentSrc];saveBadSources(bad);}
   setPreferredSource(currentTvId,playerProgType,playerProgSeason,playerProgEpisode,currentSrc);
-  updateSourceState('Sorgente salvata come funzionante');
+  updateSourceState();
   showToast('Sorgente salvata ✓');
 }
 function getSourceLabel(src){return [...SOURCES_NORMAL,...SOURCES_ANIME].find(s=>s.id===src)?.label||src;}
-function updateSourceState(msg){
+function updateSourceState(){
   const el=document.getElementById('player-source-state');if(!el)return;
-  const status=msg||(playerHasRealProgress?'autosave preciso attivo':'in attesa tempo reale dal player');
-  el.textContent=`${getSourceLabel(currentSrc)} · ${status}`;
+  el.textContent=getSourceLabel(currentSrc);
 }
 function applySavedPlayerSandbox(){document.getElementById('vix-frame')?.removeAttribute('sandbox');}
 function animeLinkKey(id,type,season,episode){return sourceContentKey(id,type,season,episode);}
 function getAnimeLinks(){return readJSONKey('svx_anime_links',{});}
-function getAnimeCustomUrl(id,type,season,episode){return getAnimeLinks()[animeLinkKey(id,type,season,episode)]||'';}
-function setAnimeCustomUrl(id,type,season,episode,url){const links=getAnimeLinks();links[animeLinkKey(id,type,season,episode)]=url;writeJSONKey('svx_anime_links',links);}
+function getAnimeWorldUrl(id,type,season,episode){return getAnimeLinks()[animeLinkKey(id,type,season,episode)]||'';}
+function setAnimeWorldUrl(id,type,season,episode,url){const links=getAnimeLinks();links[animeLinkKey(id,type,season,episode)]=url;writeJSONKey('svx_anime_links',links);}
+function normalizeAnimeWorldUrl(url){
+  url=String(url||'').trim();if(!url)return '';
+  if(url.startsWith('/'))return ANIMEWORLD_BASE+url;
+  if(/^https?:\/\//i.test(url))return url;
+  return `${ANIMEWORLD_BASE}/${url.replace(/^\/+/,'')}`;
+}
+function animeWorldSearchUrl(title){
+  const q=encodeURIComponent(String(title||'').trim());
+  return q?`${ANIMEWORLD_BASE}/archive?keyword=${q}`:ANIMEWORLD_BASE;
+}
+function extractAnimeWorldLink(data){
+  const q=[data],seen=new Set();
+  while(q.length){
+    const x=q.shift();if(x==null)continue;
+    if(typeof x==='string'){
+      const m=x.match(/https?:\/\/[^"'\s<>]+animeworld[^"'\s<>]+|\/play\/[^"'\s<>]+/i);
+      if(m)return normalizeAnimeWorldUrl(m[0]);
+      continue;
+    }
+    if(typeof x!=='object'||seen.has(x))continue;seen.add(x);
+    for(const key of ['link','url','href','embedUrl','embed','path']){
+      if(x[key]){
+        const u=normalizeAnimeWorldUrl(x[key]);
+        if(/animeworld\./i.test(u)||/\/play\//i.test(u))return u;
+      }
+    }
+    Object.values(x).forEach(v=>q.push(v));
+  }
+  return '';
+}
+async function findAnimeWorldLink(title){
+  const q=String(title||'').trim();if(!q)return '';
+  const tryFetch=async url=>{
+    try{const r=await fetch(url,{method:'GET',cache:'no-store'});if(!r.ok)return '';return extractAnimeWorldLink(await r.json());}catch(e){return '';}
+  };
+  if(ANIMEWORLD_API_BASE){
+    for(const endpoint of [`${ANIMEWORLD_API_BASE}/find?keyword=${encodeURIComponent(q)}`,`${ANIMEWORLD_API_BASE}/search?keyword=${encodeURIComponent(q)}`,`${ANIMEWORLD_API_BASE}/api/search?keyword=${encodeURIComponent(q)}`]){
+      const found=await tryFetch(endpoint);if(found)return found;
+    }
+  }
+  try{
+    const r=await fetch(`${ANIMEWORLD_BASE}/api/search/v2?keyword=${encodeURIComponent(q)}`,{method:'POST',cache:'no-store'});
+    if(r.ok){const found=extractAnimeWorldLink(await r.json());if(found)return found;}
+  }catch(e){}
+  return '';
+}
+async function resolveAnimeWorldForCurrent(){
+  if(!currentIsAnime||currentSrc!=='animeworld'||!currentTvId)return;
+  const id=currentTvId,type=playerProgType,season=playerProgSeason||document.getElementById('s-sel')?.value||1,episode=playerProgEpisode||document.getElementById('e-sel')?.value||1,fr=document.getElementById('vix-frame');
+  const cached=getAnimeWorldUrl(id,type,season,episode);
+  if(cached){if(fr&&fr.src!==cached)fr.src=cached;return cached;}
+  const found=await findAnimeWorldLink(playerSessionTitle);
+  if(found){
+    setAnimeWorldUrl(id,type,season,episode,found);
+    if(currentTvId===id&&currentSrc==='animeworld'&&fr)fr.src=found;
+    return found;
+  }
+  return '';
+}
 function promptAnimeLink(){
   if(!currentTvId)return;
-  const current=getAnimeCustomUrl(currentTvId,playerProgType,playerProgSeason,playerProgEpisode);
-  let url=prompt('Incolla il link player per questo episodio anime',current||'');
+  const current=getAnimeWorldUrl(currentTvId,playerProgType,playerProgSeason,playerProgEpisode);
+  let url=prompt('Incolla il link AnimeWorld per questo anime',current||'');
   if(url===null)return;
   url=String(url||'').trim();
-  if(!url){showToast('Link non salvato');return;}
-  if(!/^https?:\/\//i.test(url))url='https://'+url;
-  setAnimeCustomUrl(currentTvId,playerProgType,playerProgSeason,playerProgEpisode,url);
-  currentSrc='anime-custom';setPreferredSource(currentTvId,playerProgType,playerProgSeason,playerProgEpisode,currentSrc);
+  if(!url){resolveAnimeWorldForCurrent();return;}
+  url=normalizeAnimeWorldUrl(url);
+  setAnimeWorldUrl(currentTvId,playerProgType,playerProgSeason,playerProgEpisode,url);
+  currentSrc='animeworld';setPreferredSource(currentTvId,playerProgType,playerProgSeason,playerProgEpisode,currentSrc);
   buildSrcToggle(true);reloadPlayer(false);showToast('Link anime salvato ✓');
 }
-function buildSrcToggle(isAnime){const sources=getSourceList(isAnime);const toggle=document.getElementById('src-toggle');toggle.innerHTML=sources.map(s=>`<button class="src-btn${s.id===currentSrc?' active':''}" data-src="${s.id}">${s.label}</button>`).join('');toggle.querySelectorAll('.src-btn').forEach(b=>b.addEventListener('click',function(){currentSrc=this.dataset.src;setPreferredSource(currentTvId,playerProgType,playerProgSeason,playerProgEpisode,currentSrc);toggle.querySelectorAll('.src-btn').forEach(x=>x.classList.toggle('active',x.dataset.src===currentSrc));reloadPlayer();}));updateSourceState();}
-function reloadPlayer(saveFirst=true){if(saveFirst)requestPlayerRealProgress();clearTimeout(playerSourceHealthTimer);const fr=document.getElementById('vix-frame'),tc=document.getElementById('tv-ctrl');const s=document.getElementById('s-sel').value||1,ep=document.getElementById('e-sel').value||1;applySavedPlayerSandbox();if(tc.style.display!=='none'&&currentTvId){const prog=getProgress(currentTvId,'tv',s,ep);fr.src=getEmbedUrl(currentTvId,'tv',s,ep,currentSrc,prog?prog.secs:0);resetPlayerAutoClock();}else if(currentTvId){const prog=getProgress(currentTvId,'movie',null,null);fr.src=getEmbedUrl(currentTvId,'movie',null,null,currentSrc,prog?prog.secs:0);resetPlayerAutoClock();}updateSourceState();playerSourceHealthTimer=setTimeout(()=>{if(!playerHasRealProgress)updateSourceState('il player non comunica il tempo reale');},45000);}
+function buildSrcToggle(isAnime){const sources=getSourceList(isAnime);const toggle=document.getElementById('src-toggle');toggle.innerHTML=sources.length>1?sources.map(s=>`<button class="src-btn${s.id===currentSrc?' active':''}" data-src="${s.id}">${s.label}</button>`).join(''):'';toggle.querySelectorAll('.src-btn').forEach(b=>b.addEventListener('click',function(){currentSrc=this.dataset.src;setPreferredSource(currentTvId,playerProgType,playerProgSeason,playerProgEpisode,currentSrc);toggle.querySelectorAll('.src-btn').forEach(x=>x.classList.toggle('active',x.dataset.src===currentSrc));reloadPlayer();}));updateSourceState();}
+function reloadPlayer(saveFirst=true){if(saveFirst)requestPlayerRealProgress();clearTimeout(playerSourceHealthTimer);const fr=document.getElementById('vix-frame'),tc=document.getElementById('tv-ctrl');const s=document.getElementById('s-sel').value||1,ep=document.getElementById('e-sel').value||1;applySavedPlayerSandbox();if(tc.style.display!=='none'&&currentTvId){const prog=getProgress(currentTvId,'tv',s,ep);fr.src=getEmbedUrl(currentTvId,'tv',s,ep,currentSrc,prog?prog.secs:0);resetPlayerAutoClock();}else if(currentTvId){const prog=getProgress(currentTvId,'movie',null,null);fr.src=getEmbedUrl(currentTvId,'movie',null,null,currentSrc,prog?prog.secs:0);resetPlayerAutoClock();}updateSourceState();resolveAnimeWorldForCurrent();}
 function updateDeviceMediaSession(title,type,poster,season,episode){
   if(!('mediaSession' in navigator)||typeof MediaMetadata==='undefined')return;
   try{
@@ -1005,7 +1054,7 @@ function updateDeviceMediaSession(title,type,poster,season,episode){
   }catch(e){}
 }
 function updateNextEpisodeButton(){const btn=document.getElementById('btn-next-ep');if(!btn)return;const tv=playerProgType==='tv'&&document.getElementById('player-modal').classList.contains('open');btn.style.display=tv?'inline-flex':'none';btn.classList.remove('next-ready');}
-function loadSelectedTvEpisode(s,ep){if(!currentTvId)return;playerProgSeason=Number(s);playerProgEpisode=Number(ep);currentSrc=getPreferredSource(currentTvId,'tv',s,ep,currentIsAnime,currentSrc);buildSrcToggle(currentIsAnime);refreshNoteBar(currentTvId,'tv',s,ep);const prog=getProgress(currentTvId,'tv',s,ep);applySavedPlayerSandbox();document.getElementById('vix-frame').src=getEmbedUrl(currentTvId,'tv',s,ep,currentSrc,prog?prog.secs:0);resetPlayerAutoClock();saveWatching(currentTvId,'tv',playerSessionTitle||document.getElementById('pm-title').textContent,playerSessionPoster,s,ep);updateDeviceMediaSession(playerSessionTitle,'tv',playerSessionPoster,s,ep);refreshCW();updateNextEpisodeButton();updateSourceState();}
+function loadSelectedTvEpisode(s,ep){if(!currentTvId)return;playerProgSeason=Number(s);playerProgEpisode=Number(ep);currentSrc=getPreferredSource(currentTvId,'tv',s,ep,currentIsAnime,currentSrc);buildSrcToggle(currentIsAnime);refreshNoteBar(currentTvId,'tv',s,ep);const prog=getProgress(currentTvId,'tv',s,ep);applySavedPlayerSandbox();document.getElementById('vix-frame').src=getEmbedUrl(currentTvId,'tv',s,ep,currentSrc,prog?prog.secs:0);resetPlayerAutoClock();saveWatching(currentTvId,'tv',playerSessionTitle||document.getElementById('pm-title').textContent,playerSessionPoster,s,ep);updateDeviceMediaSession(playerSessionTitle,'tv',playerSessionPoster,s,ep);refreshCW();updateNextEpisodeButton();updateSourceState();resolveAnimeWorldForCurrent();}
 async function goNextEpisode(){
   if(!currentTvId||playerProgType!=='tv')return;
   persistEstimatedProgress();clearTimeout(epChangeTimer);
@@ -1022,11 +1071,11 @@ document.getElementById('btn-src-bad').addEventListener('click',markSourceBad);
 document.getElementById('btn-anime-link').addEventListener('click',promptAnimeLink);
 async function openPlayer(id,type,title,poster,season,episode,isAnime){
   const last=getLastWatched(id),initialS=season||last?.season||1,initialE=episode||last?.episode||1;
-  currentIsAnime=!!isAnime;currentSrc=getPreferredSource(id,type,initialS,initialE,!!isAnime,isAnime?'anime-custom':'vixsrc');currentTvId=String(id);document.getElementById('pm-title').textContent=title;document.getElementById('anime-note').style.display=isAnime?'block':'none';document.getElementById('btn-anime-link').style.display=isAnime?'inline-flex':'none';buildSrcToggle(isAnime);autoAddToWatching({id:String(id),type,title,poster:poster||'',isAnime:!!isAnime});
+  currentIsAnime=!!isAnime;currentSrc=getPreferredSource(id,type,initialS,initialE,!!isAnime,isAnime?'animeworld':'vixsrc');currentTvId=String(id);document.getElementById('pm-title').textContent=title;document.getElementById('anime-note').style.display='none';document.getElementById('btn-anime-link').style.display=isAnime?'inline-flex':'none';buildSrcToggle(isAnime);autoAddToWatching({id:String(id),type,title,poster:poster||'',isAnime:!!isAnime});
   playerProgId=String(id);playerProgType=type;playerProgSeason=season||null;playerProgEpisode=episode||null;playerNoteSavedThisSession=true;playerSessionTitle=title;playerSessionPoster=poster||'';playerSessionIsAnime=!!isAnime;playerLastAutoSecs=0;playerLastAutoSaveAt=0;stopPlayerAutoSave(false);hideReminderOverlay();document.getElementById('pm-note-bar').classList.remove('highlight');updateDeviceMediaSession(title,type,poster,season,episode);
   const tc=document.getElementById('tv-ctrl'),fr=document.getElementById('vix-frame');
-  if(type==='tv'){tc.style.display='flex';const sSel=document.getElementById('s-sel'),eSel=document.getElementById('e-sel');sSel.innerHTML='<option>Caricamento…</option>';eSel.innerHTML='<option>Caricamento…</option>';document.getElementById('player-modal').classList.add('open');document.body.style.overflow='hidden';const lastS=initialS,lastE=initialE;try{const show=await tmdb(`/tv/${id}`);const seasons=(show.seasons||[]).filter(s=>s.season_number>0);if(!seasons.length)seasons.push({season_number:1,episode_count:10,name:'Stagione 1'});sSel.innerHTML=seasons.map(s=>`<option value="${s.season_number}">S${s.season_number} · ${s.name||'Stagione '+s.season_number} (${s.episode_count||'?'} ep.)</option>`).join('');sSel.value=String(lastS);await loadEpisodesForPlayer(id,sSel.value,lastE);}catch(e){sSel.innerHTML='<option value="1">Stagione 1</option>';eSel.innerHTML='<option value="1">Episodio 1</option>';}const s=sSel.value||1,ep=document.getElementById('e-sel').value||1;playerProgSeason=Number(s);playerProgEpisode=Number(ep);currentSrc=getPreferredSource(id,type,s,ep,!!isAnime,currentSrc);buildSrcToggle(isAnime);refreshNoteBar(id,type,s,ep);const prog=getProgress(id,type,s,ep);applySavedPlayerSandbox();fr.src=getEmbedUrl(id,type,s,ep,currentSrc,prog?prog.secs:0);startPlayerAutoSave(prog?prog.secs:0);saveWatching(id,type,title,poster,s,ep);updateNextEpisodeButton();updateSourceState();}
-  else{tc.style.display='none';playerProgSeason=null;playerProgEpisode=null;refreshNoteBar(id,type,null,null);const prog=getProgress(id,type,null,null);applySavedPlayerSandbox();fr.src=getEmbedUrl(id,type,null,null,currentSrc,prog?prog.secs:0);startPlayerAutoSave(prog?prog.secs:0);document.getElementById('player-modal').classList.add('open');document.body.style.overflow='hidden';saveWatching(id,type,title,poster,null,null);updateNextEpisodeButton();updateSourceState();}
+  if(type==='tv'){tc.style.display='flex';const sSel=document.getElementById('s-sel'),eSel=document.getElementById('e-sel');sSel.innerHTML='<option>Caricamento…</option>';eSel.innerHTML='<option>Caricamento…</option>';document.getElementById('player-modal').classList.add('open');document.body.style.overflow='hidden';const lastS=initialS,lastE=initialE;try{const show=await tmdb(`/tv/${id}`);const seasons=(show.seasons||[]).filter(s=>s.season_number>0);if(!seasons.length)seasons.push({season_number:1,episode_count:10,name:'Stagione 1'});sSel.innerHTML=seasons.map(s=>`<option value="${s.season_number}">S${s.season_number} · ${s.name||'Stagione '+s.season_number} (${s.episode_count||'?'} ep.)</option>`).join('');sSel.value=String(lastS);await loadEpisodesForPlayer(id,sSel.value,lastE);}catch(e){sSel.innerHTML='<option value="1">Stagione 1</option>';eSel.innerHTML='<option value="1">Episodio 1</option>';}const s=sSel.value||1,ep=document.getElementById('e-sel').value||1;playerProgSeason=Number(s);playerProgEpisode=Number(ep);currentSrc=getPreferredSource(id,type,s,ep,!!isAnime,currentSrc);buildSrcToggle(isAnime);refreshNoteBar(id,type,s,ep);const prog=getProgress(id,type,s,ep);applySavedPlayerSandbox();fr.src=getEmbedUrl(id,type,s,ep,currentSrc,prog?prog.secs:0);startPlayerAutoSave(prog?prog.secs:0);saveWatching(id,type,title,poster,s,ep);updateNextEpisodeButton();updateSourceState();resolveAnimeWorldForCurrent();}
+  else{tc.style.display='none';playerProgSeason=null;playerProgEpisode=null;refreshNoteBar(id,type,null,null);const prog=getProgress(id,type,null,null);applySavedPlayerSandbox();fr.src=getEmbedUrl(id,type,null,null,currentSrc,prog?prog.secs:0);startPlayerAutoSave(prog?prog.secs:0);document.getElementById('player-modal').classList.add('open');document.body.style.overflow='hidden';saveWatching(id,type,title,poster,null,null);updateNextEpisodeButton();updateSourceState();resolveAnimeWorldForCurrent();}
   refreshCW();
 }
 async function loadEpisodesForPlayer(showId,season,preselect){const eSel=document.getElementById('e-sel');eSel.innerHTML='<option>Caricamento…</option>';try{const data=await tmdb(`/tv/${showId}/season/${season}`);const eps=data.episodes||[];if(!eps.length)throw Error('empty');eSel.innerHTML=eps.map(e=>`<option value="${e.episode_number}">Ep. ${e.episode_number}${e.name?' · '+e.name:''}</option>`).join('');if(preselect)eSel.value=String(preselect);}catch(e){eSel.innerHTML='<option value="1">Episodio 1</option>';}}
