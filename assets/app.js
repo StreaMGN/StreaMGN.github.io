@@ -551,10 +551,27 @@ document.getElementById('import-modal').addEventListener('click',e=>{if(e.target
 
 /* EMBED URLS */
 function addResumeParams(params,startSecs){if(startSecs&&startSecs>10){const v=Math.round(startSecs);params.push(`startAt=${v}`);params.push(`t=${v}`);}}
+function isAnimeSource(src){return currentIsAnime||src==='anime'||src==='animeworld';}
+function isPlayablePlayerUrl(url,anime=false){
+  url=String(url||'').trim();
+  if(!url||url==='about:blank')return false;
+  if(/^data:|^blob:/i.test(url))return true;
+  try{
+    const u=new URL(url,location.href);
+    const host=u.hostname.toLowerCase(),path=u.pathname.toLowerCase();
+    if(anime&&host.includes('animeworld.')&&!/\.(m3u8|mp4|webm|mov)(\?|$)/i.test(path))return false;
+    return /^https?:$/i.test(u.protocol);
+  }catch(e){return false;}
+}
+function setFrameMessage(frame,title,body,actionUrl=''){
+  const link=actionUrl?`<a href="${ea(actionUrl)}" target="_blank" rel="noopener" style="display:inline-flex;margin-top:18px;padding:10px 14px;border-radius:999px;background:#fff;color:#000;text-decoration:none;font:700 13px -apple-system,BlinkMacSystemFont,sans-serif">Apri ricerca</a>`:'';
+  frame.removeAttribute('src');
+  frame.srcdoc=`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;width:100%;height:100%;background:#050505;color:#fff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif}.wrap{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;padding:28px;box-sizing:border-box}.box{max-width:520px}.title{font-size:20px;font-weight:800;margin-bottom:10px}.body{font-size:14px;line-height:1.45;color:rgba(255,255,255,.68)}</style></head><body><div class="wrap"><div class="box"><div class="title">${ea(title)}</div><div class="body">${ea(body)}</div>${link}</div></div></body></html>`;
+}
 function getEmbedUrl(id,type,season,episode,src,startSecs){
   const s=season||1,e=episode||1;
   if(src==='anime'||src==='animeworld'){
-    return window.StreamGNProviders?.getAnimeFallbackUrl?.({id,type,season:s,episode:e,title:playerSessionTitle})||'about:blank';
+    return window.StreamGNProviders?.getAnimeFallbackUrl?.({id,type,season:s,episode:e,title:playerSessionTitle,titles:playerSessionAnimeTitles})||'about:blank';
   }
   if(src==='vixsrc-it'){
     const url=type==='tv'?`https://vixsrc.to/tv/${id}/${s}/${e}`:`https://vixsrc.to/movie/${id}`;
@@ -569,25 +586,37 @@ function getEmbedUrl(id,type,season,episode,src,startSecs){
   if(lang&&lang!=='original')params.push(`hl=${lang}`);if(subs&&subs!=='none')params.push(`sl=${subs}`);addResumeParams(params,startSecs);
   return params.length?url+'?'+params.join('&'):url;
 }
-async function resolveStreamUrl(id,type,season,episode,src,startSecs){
+async function resolveStreamResult(id,type,season,episode,src,startSecs){
   const s=season||1,e=episode||1,fallback=getEmbedUrl(id,type,s,e,src,startSecs),providers=window.StreamGNProviders;
-  if(!providers)return fallback;
+  if(!providers)return {ok:!!fallback,embedUrl:fallback};
   const payload={id:String(id),tmdbId:String(id),type,season:s,episode:e,title:playerSessionTitle,titles:playerSessionAnimeTitles,poster:playerSessionPoster,provider:src,source:src,startSecs,settings:loadSettings(),fallbackUrl:fallback};
   try{
-    const result=(currentIsAnime||src==='anime'||src==='animeworld')
+    const result=isAnimeSource(src)
       ? await providers.getAnimeStream(payload)
       : type==='tv'
         ? await providers.getSeriesStream(payload)
         : await providers.getMovieStream(payload);
-    return result?.embedUrl||result?.iframeUrl||result?.url||fallback;
-  }catch(e){return fallback;}
+    return result||{ok:!!fallback,embedUrl:fallback};
+  }catch(e){return {ok:!!fallback,embedUrl:fallback,error:'stream resolve failed'};}
+}
+async function resolveStreamUrl(id,type,season,episode,src,startSecs){
+  const result=await resolveStreamResult(id,type,season,episode,src,startSecs);
+  return result?.embedUrl||result?.iframeUrl||result?.url||'';
 }
 async function setPlayerFrameSrc(id,type,season,episode,src,startSecs){
   const fr=document.getElementById('vix-frame');if(!fr)return;
-  const seq=++playerStreamSeq,fallback=getEmbedUrl(id,type,season,episode,src,startSecs),providers=window.StreamGNProviders;
-  fr.src=providers?.hasBackend?.()?'about:blank':fallback;
-  const url=await resolveStreamUrl(id,type,season,episode,src,startSecs);
+  const seq=++playerStreamSeq,fallback=getEmbedUrl(id,type,season,episode,src,startSecs),providers=window.StreamGNProviders,anime=isAnimeSource(src);
+  if(anime)setFrameMessage(fr,'Caricamento anime','Sto cercando una sorgente italiana valida per questo episodio.');
+  else{fr.removeAttribute('srcdoc');fr.src=providers?.hasBackend?.()?'about:blank':fallback;}
+  const result=await resolveStreamResult(id,type,season,episode,src,startSecs);
   if(seq!==playerStreamSeq||String(currentTvId)!==String(id))return;
+  const url=result?.embedUrl||result?.iframeUrl||result?.url||fallback;
+  if(anime&&(!result?.ok||!isPlayablePlayerUrl(url,true))){
+    const searchUrl=providers?.animeSearchUrl?.(playerSessionAnimeTitles[0]||playerSessionTitle)||'';
+    setFrameMessage(fr,'Sorgente anime non disponibile','Serve il provider AnimeWorld-API/Tadako online per aprire direttamente questo episodio. Il sito non carica piu pagine AnimeWorld bloccate nell iframe.',searchUrl);
+    return;
+  }
+  fr.removeAttribute('srcdoc');
   fr.src=url||fallback;
 }
 
