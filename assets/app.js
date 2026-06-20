@@ -568,6 +568,20 @@ function setFrameMessage(frame,title,body,actionUrl=''){
   frame.removeAttribute('src');
   frame.srcdoc=`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;width:100%;height:100%;background:#050505;color:#fff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif}.wrap{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;padding:28px;box-sizing:border-box}.box{max-width:520px}.title{font-size:20px;font-weight:800;margin-bottom:10px}.body{font-size:14px;line-height:1.45;color:rgba(255,255,255,.68)}</style></head><body><div class="wrap"><div class="box"><div class="title">${ea(title)}</div><div class="body">${ea(body)}</div>${link}</div></div></body></html>`;
 }
+function withTimeout(promise,ms,message='timeout'){
+  let timer;
+  const timeout=new Promise(resolve=>{timer=setTimeout(()=>resolve({ok:false,embedUrl:'',error:message}),ms);});
+  return Promise.race([promise,timeout]).finally(()=>clearTimeout(timer));
+}
+async function ensureStreamRemoteConfig(){
+  try{
+    const cfg=await fetchRemoteConfig();
+    if(!cfg)return;
+    if(cfg.streamApiBase)window.STREAMGN_CONFIG.streamApiBase=cfg.streamApiBase;
+    if(cfg.animeWorldApiBase)window.STREAMGN_CONFIG.animeWorldApiBase=cfg.animeWorldApiBase;
+    if(cfg.animeWorldBaseUrl)window.STREAMGN_CONFIG.animeWorldBaseUrl=cfg.animeWorldBaseUrl;
+  }catch(e){}
+}
 function getEmbedUrl(id,type,season,episode,src,startSecs){
   const s=season||1,e=episode||1;
   if(src==='anime'||src==='animeworld'){
@@ -589,6 +603,7 @@ function getEmbedUrl(id,type,season,episode,src,startSecs){
 async function resolveStreamResult(id,type,season,episode,src,startSecs){
   const s=season||1,e=episode||1,fallback=getEmbedUrl(id,type,s,e,src,startSecs),providers=window.StreamGNProviders;
   if(!providers)return {ok:!!fallback,embedUrl:fallback};
+  if(isAnimeSource(src))await ensureStreamRemoteConfig();
   const payload={id:String(id),tmdbId:String(id),type,season:s,episode:e,title:playerSessionTitle,titles:playerSessionAnimeTitles,poster:playerSessionPoster,provider:src,source:src,startSecs,settings:loadSettings(),fallbackUrl:fallback};
   try{
     const result=isAnimeSource(src)
@@ -608,7 +623,7 @@ async function setPlayerFrameSrc(id,type,season,episode,src,startSecs){
   const seq=++playerStreamSeq,fallback=getEmbedUrl(id,type,season,episode,src,startSecs),providers=window.StreamGNProviders,anime=isAnimeSource(src);
   if(anime)setFrameMessage(fr,'Caricamento anime','Sto cercando una sorgente italiana valida per questo episodio.');
   else{fr.removeAttribute('srcdoc');fr.src=providers?.hasBackend?.()?'about:blank':fallback;}
-  const result=await resolveStreamResult(id,type,season,episode,src,startSecs);
+  const result=await withTimeout(resolveStreamResult(id,type,season,episode,src,startSecs),anime?12000:18000,'anime provider timeout');
   if(seq!==playerStreamSeq||String(currentTvId)!==String(id))return;
   const url=result?.embedUrl||result?.iframeUrl||result?.url||fallback;
   if(anime&&(!result?.ok||!isPlayablePlayerUrl(url,true))){

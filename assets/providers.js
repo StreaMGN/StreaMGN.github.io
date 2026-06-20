@@ -2,7 +2,6 @@
 
 (function(){
   const CONFIG=window.STREAMGN_CONFIG||{};
-  const API_BASE=String(CONFIG.streamApiBase||'').replace(/\/$/,'');
   const ROUTES={
     movie:'/play/movie/:id',
     tv:'/play/tv/:id/:season/:episode',
@@ -10,9 +9,11 @@
     sport:'/sport/live',
     ...(CONFIG.streamRoutes||{})
   };
-  const ANIMEWORLD_BASE=String(CONFIG.animeWorldBaseUrl||'https://www.animeworld.ac').replace(/\/$/,'');
-  const ANIMEWORLD_API_BASE=String(CONFIG.animeWorldApiBase||'').replace(/\/$/,'');
   const DATA_KEY='svx_anime_links';
+  function liveConfig(){return window.STREAMGN_CONFIG||CONFIG||{};}
+  function apiBase(){return String(liveConfig().streamApiBase||'').replace(/\/$/,'');}
+  function animeWorldBase(){return String(liveConfig().animeWorldBaseUrl||'https://www.animeworld.ac').replace(/\/$/,'');}
+  function animeWorldApiBase(){return String(liveConfig().animeWorldApiBase||'').replace(/\/$/,'');}
 
   function readJSON(key,fallback){
     try{return JSON.parse(localStorage.getItem(key)||'')||fallback;}catch(e){return fallback;}
@@ -50,6 +51,7 @@
     return {signal:controller.signal};
   }
   async function callBackend(kind,params,fallbackUrl){
+    const API_BASE=apiBase();
     if(!API_BASE)return null;
     const route=ROUTES[kind];if(!route)return null;
     const path=fillRoute(route,params);
@@ -89,12 +91,14 @@
   function embedMovie(id){return `https://embed.su/embed/movie/${id}`;}
   function embedTv(id,season,episode){return `https://embed.su/embed/tv/${id}/${season||1}/${episode||1}`;}
   function normalizeAnimeUrl(url){
+    const ANIMEWORLD_BASE=animeWorldBase();
     url=String(url||'').trim();if(!url)return '';
     if(url.startsWith('/'))return ANIMEWORLD_BASE+url;
     if(/^https?:\/\//i.test(url))return url;
     return `${ANIMEWORLD_BASE}/${url.replace(/^\/+/,'')}`;
   }
   function animeSearchUrl(title){
+    const ANIMEWORLD_BASE=animeWorldBase();
     const q=encodeURIComponent(String(title||'').trim());
     return q?`${ANIMEWORLD_BASE}/archive?keyword=${q}`:ANIMEWORLD_BASE;
   }
@@ -102,7 +106,7 @@
     url=String(url||'').trim();
     if(!url||url==='about:blank')return false;
     try{
-      const u=new URL(url,ANIMEWORLD_BASE);
+      const u=new URL(url,animeWorldBase());
       const host=u.hostname.toLowerCase(),path=u.pathname.toLowerCase();
       if(host.includes('animeworld.')&&!/\.(m3u8|mp4|webm|mov)(\?|$)/i.test(path))return false;
       return true;
@@ -143,7 +147,7 @@
         continue;
       }
       if(typeof x!=='object'||seen.has(x))continue;seen.add(x);
-      for(const key of ['link','url','href','embedUrl','iframeUrl','path']){
+      for(const key of ['streamUrl','fileLink','file','link','url','href','embedUrl','iframeUrl','path']){
         if(x[key]){
           const url=normalizeAnimeUrl(x[key]);
           if(isLikelyPlayableAnimeUrl(url))return url;
@@ -164,6 +168,7 @@
     const titles=animeTitleCandidates(params);
     if(!titles.length)return '';
     const season=params?.season||1,episode=params?.episode||1,id=params?.id||params?.tmdbId||'';
+    const ANIMEWORLD_API_BASE=animeWorldApiBase();
     if(ANIMEWORLD_API_BASE){
       for(const title of titles){
         const qs=new URLSearchParams({title,keyword:title,q:title,id:String(id),season:String(season),episode:String(episode)});
@@ -178,12 +183,6 @@
           if(found)return found;
         }
       }
-    }
-    for(const title of titles){
-      try{
-        const r=await fetch(`${ANIMEWORLD_BASE}/api/search/v2?keyword=${encodeURIComponent(title)}`,{method:'POST',cache:'no-store',...timeoutSignal(5000)});
-        if(r.ok){const found=extractAnimeWorldLink(await r.json());if(found)return found;}
-      }catch(e){}
     }
     return '';
   }
@@ -224,7 +223,7 @@
     return {ok:false,provider:'animeworld',embedUrl:fallback,error:'anime provider unavailable'};
   }
   async function getSportStream(params={}){
-    const fallback=params.fallbackUrl||CONFIG.sportDefaultUrl||'';
+    const fallback=params.fallbackUrl||liveConfig().sportDefaultUrl||'';
     return await callBackend('sport',params,fallback)||{ok:true,provider:'configured',embedUrl:fallback};
   }
   function getAnimeFallbackUrl(params){
@@ -232,7 +231,7 @@
   }
 
   window.StreamGNProviders={
-    hasBackend:()=>!!API_BASE,
+    hasBackend:()=>!!apiBase(),
     getMovieStream,
     getSeriesStream,
     getAnimeStream,

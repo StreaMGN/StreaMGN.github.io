@@ -80,20 +80,32 @@ function normalizeAnimeUrl(base,url){
   if(/^https?:\/\//i.test(url))return url;
   return `${base}/${url.replace(/^\/+/,'')}`;
 }
+function isLikelyPlayableUrl(base,url){
+  url=String(url||'').trim();if(!url)return false;
+  try{
+    const parsed=new URL(url,base);
+    const host=parsed.hostname.toLowerCase(),path=parsed.pathname.toLowerCase();
+    if(host.includes('animeworld.')&&!/\.(m3u8|mp4|webm|mov)(\?|$)/i.test(path))return false;
+    return /^https?:$/i.test(parsed.protocol);
+  }catch(e){return false;}
+}
 function extractAnimeWorldLink(base,data){
   const queue=[data],seen=new Set();
   while(queue.length){
     const item=queue.shift();if(item==null)continue;
     if(typeof item==='string'){
       const match=item.match(/https?:\/\/[^"'\s<>]+animeworld[^"'\s<>]+|\/play\/[^"'\s<>]+/i);
-      if(match)return normalizeAnimeUrl(base,match[0]);
+      if(match){
+        const url=normalizeAnimeUrl(base,match[0]);
+        if(isLikelyPlayableUrl(base,url))return url;
+      }
       continue;
     }
     if(typeof item!=='object'||seen.has(item))continue;seen.add(item);
-    for(const key of ['link','url','href','embedUrl','iframeUrl','path']){
+    for(const key of ['streamUrl','fileLink','file','link','url','href','embedUrl','iframeUrl','path']){
       if(item[key]){
         const url=normalizeAnimeUrl(base,item[key]);
-        if(/animeworld\./i.test(url)||/\/play\//i.test(url))return url;
+        if(isLikelyPlayableUrl(base,url))return url;
       }
     }
     Object.values(item).forEach(value=>queue.push(value));
@@ -105,6 +117,7 @@ async function animeWorldProvider(ctx,env){
   const titles=animeTitleCandidates(ctx);
   if(!titles.length)throw new Error('missing anime title');
   const apiBase=String(env.ANIMEWORLD_API_BASE||'').replace(/\/$/,'');
+  if(!apiBase)throw new Error('animeworld wrapper not configured');
   if(apiBase){
     for(const title of titles){
       const qs=new URLSearchParams({
@@ -126,16 +139,7 @@ async function animeWorldProvider(ctx,env){
       }
     }
   }
-  for(const title of titles){
-    try{
-      const res=await fetch(`${base}/api/search/v2?keyword=${encodeURIComponent(title)}`,{method:'POST',headers:{accept:'application/json'}});
-      if(res.ok){
-        const found=extractAnimeWorldLink(base,await res.json());
-        if(found)return {provider:'animeworld',embedUrl:found};
-      }
-    }catch(e){}
-  }
-  return {provider:'animeworld',embedUrl:`${base}/archive?keyword=${encodeURIComponent(titles[0])}`};
+  throw new Error('animeworld stream not found');
 }
 async function tadakoProvider(ctx,env){
   const base=String(env.TADAKO_API_BASE||'').replace(/\/$/,'');
