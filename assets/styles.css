@@ -393,7 +393,8 @@ main{padding-bottom:5rem}
 .ctrl-hint{font-size:.6rem;color:var(--tx3);margin-top:2px;font-style:italic}
 .player-box{width:100%;aspect-ratio:16/9;background:#000;border-radius:var(--r2);overflow:hidden;border:.5px solid var(--b1);box-shadow:0 32px 80px rgba(0,0,0,.9),0 0 0 1px rgba(255,255,255,.035);position:relative}
 .player-box::after{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 1px 0 rgba(255,255,255,.14),inset 0 -1px 0 rgba(255,255,255,.04);pointer-events:none;z-index:2}
-.player-box iframe{width:100%;height:100%;border:none;display:block;position:relative;z-index:1}
+.player-box iframe,.player-box video{width:100%;height:100%;border:none;display:block;position:relative;z-index:1;background:#000}
+.player-box video{object-fit:contain}
 
 /* FOLDER PICKER */
 #folder-picker{display:none;position:fixed;inset:0;z-index:800;background:var(--scrim-bg);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);align-items:flex-end;justify-content:center}

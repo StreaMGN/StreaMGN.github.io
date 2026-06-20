@@ -121,6 +121,34 @@
     }
     return url;
   }
+  function cleanDirectUrl(value){
+    if(!value)return '';
+    if(typeof value==='string')return value.trim();
+    return String(value.streamUrl||value.embedUrl||value.url||value.file||value.fileLink||'').trim();
+  }
+  function directAnimeSource(params){
+    const cfg=liveConfig(),sources=cfg.animeSources||cfg.animeSourceMap||{};
+    const keys=[
+      contentKey(params.id,params.type||'tv',params.season,params.episode),
+      `${params.id}_s${params.season||1}_e${params.episode||1}`,
+      `${params.id}_${params.season||1}_${params.episode||1}`,
+      String(params.id)
+    ];
+    for(const key of keys){
+      const value=sources[key];
+      const url=cleanDirectUrl(value);
+      if(url)return url;
+      if(value&&typeof value==='object'){
+        const seasonValue=value[String(params.season||1)]||value[`s${params.season||1}`];
+        if(seasonValue&&typeof seasonValue==='object'){
+          const epValue=seasonValue[String(params.episode||1)]||seasonValue[`e${params.episode||1}`];
+          const epUrl=cleanDirectUrl(epValue);
+          if(epUrl)return epUrl;
+        }
+      }
+    }
+    return '';
+  }
   function setAnimeOverride(id,type,season,episode,url){
     const data=readJSON(DATA_KEY,{});
     data[contentKey(id,type,season,episode)]=normalizeAnimeUrl(url);
@@ -211,6 +239,8 @@
   }
   async function getAnimeStream(params){
     const fallback=getAnimeFallbackUrl(params);
+    const direct=directAnimeSource(params);
+    if(direct)return {ok:true,provider:'direct',embedUrl:direct};
     const backend=await callBackend('anime',params,'');
     if(backend)return backend;
     const saved=getAnimeOverride(params.id,params.type||'tv',params.season,params.episode);

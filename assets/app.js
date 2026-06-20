@@ -331,6 +331,11 @@ function resetPlayerAutoClock(){
   playerLastAutoSaveAt=0;
 }
 function requestPlayerRealProgress(){
+  const video=document.getElementById('stream-video');
+  if(video&&video.style.display!=='none'&&video.src){
+    handleAutoProgress({event:video.ended?'ended':'timeupdate',currentTime:video.currentTime||0,duration:video.duration||0});
+    return video.currentTime||0;
+  }
   const fr=document.getElementById('vix-frame');
   try{
     fr?.contentWindow?.postMessage({type:'STREAMGN_GET_CURRENT_TIME',event:'getCurrentTime'},'*');
@@ -419,6 +424,12 @@ function handleAutoProgress(payload){
   refreshNoteBar(playerProgId,playerProgType,playerProgSeason,playerProgEpisode);refreshCW();
 }
 window.addEventListener('message',function(e){if(!trustedPlayerOrigin(e.origin))return;handleAutoProgress(parsePlayerPayload(e.data));});
+const nativeVideoEl=document.getElementById('stream-video');
+if(nativeVideoEl){
+  nativeVideoEl.addEventListener('timeupdate',()=>handleAutoProgress({event:'timeupdate',currentTime:nativeVideoEl.currentTime||0,duration:nativeVideoEl.duration||0}));
+  nativeVideoEl.addEventListener('pause',()=>handleAutoProgress({event:'pause',currentTime:nativeVideoEl.currentTime||0,duration:nativeVideoEl.duration||0}));
+  nativeVideoEl.addEventListener('ended',()=>handleAutoProgress({event:'ended',currentTime:nativeVideoEl.currentTime||0,duration:nativeVideoEl.duration||0}));
+}
 function showReminderOverlay(){const ov=document.getElementById('pm-reminder-ov'),inp=document.getElementById('pm-reminder-inp');inp.value=document.getElementById('pm-note-inp').value.trim();ov.classList.add('open');setTimeout(()=>inp.focus(),80);}
 function hideReminderOverlay(){document.getElementById('pm-reminder-ov').classList.remove('open');}
 document.getElementById('btn-reminder-save').addEventListener('click',function(){
@@ -563,7 +574,43 @@ function isPlayablePlayerUrl(url,anime=false){
     return /^https?:$/i.test(u.protocol);
   }catch(e){return false;}
 }
+function isDirectVideoUrl(url){
+  url=String(url||'').trim();
+  if(!url)return false;
+  try{
+    const u=new URL(url,location.href);
+    return /\.(mp4|m4v|webm|mov|m3u8)(\?|$)/i.test(u.pathname)||/\.m3u8(\?|$)/i.test(url);
+  }catch(e){return /\.(mp4|m4v|webm|mov|m3u8)(\?|$)/i.test(url);}
+}
+function stopNativeVideo(clear=true){
+  const video=document.getElementById('stream-video');
+  if(!video)return;
+  try{video.pause();}catch(e){}
+  if(clear){video.removeAttribute('src');video.load();}
+  video.style.display='none';
+}
+function showIframePlayer(frame){
+  const video=document.getElementById('stream-video');
+  if(video){stopNativeVideo(true);}
+  frame.style.display='block';
+}
+function setNativeVideoSrc(url,startSecs=0){
+  const frame=document.getElementById('vix-frame'),video=document.getElementById('stream-video');
+  if(!video)return false;
+  if(frame){frame.removeAttribute('srcdoc');frame.removeAttribute('src');frame.style.display='none';}
+  video.style.display='block';
+  video.src=url;
+  const seek=Number(startSecs)||0;
+  if(seek>5){
+    const applySeek=()=>{try{video.currentTime=seek;}catch(e){}};
+    if(video.readyState>=1)applySeek();else video.addEventListener('loadedmetadata',applySeek,{once:true});
+  }
+  video.play().catch(()=>{});
+  return true;
+}
 function setFrameMessage(frame,title,body,actionUrl=''){
+  stopNativeVideo(true);
+  frame.style.display='block';
   const link=actionUrl?`<a href="${ea(actionUrl)}" target="_blank" rel="noopener" style="display:inline-flex;margin-top:18px;padding:10px 14px;border-radius:999px;background:#fff;color:#000;text-decoration:none;font:700 13px -apple-system,BlinkMacSystemFont,sans-serif">Apri ricerca</a>`:'';
   frame.removeAttribute('src');
   frame.srcdoc=`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;width:100%;height:100%;background:#050505;color:#fff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif}.wrap{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;padding:28px;box-sizing:border-box}.box{max-width:520px}.title{font-size:20px;font-weight:800;margin-bottom:10px}.body{font-size:14px;line-height:1.45;color:rgba(255,255,255,.68)}</style></head><body><div class="wrap"><div class="box"><div class="title">${ea(title)}</div><div class="body">${ea(body)}</div>${link}</div></div></body></html>`;
@@ -580,6 +627,8 @@ async function ensureStreamRemoteConfig(){
     if(cfg.streamApiBase)window.STREAMGN_CONFIG.streamApiBase=cfg.streamApiBase;
     if(cfg.animeWorldApiBase)window.STREAMGN_CONFIG.animeWorldApiBase=cfg.animeWorldApiBase;
     if(cfg.animeWorldBaseUrl)window.STREAMGN_CONFIG.animeWorldBaseUrl=cfg.animeWorldBaseUrl;
+    if(cfg.animeSources&&Object.keys(cfg.animeSources).length)window.STREAMGN_CONFIG.animeSources=cfg.animeSources;
+    if(cfg.animeSourceMap&&Object.keys(cfg.animeSourceMap).length)window.STREAMGN_CONFIG.animeSourceMap=cfg.animeSourceMap;
   }catch(e){}
 }
 function getEmbedUrl(id,type,season,episode,src,startSecs){
@@ -622,15 +671,16 @@ async function setPlayerFrameSrc(id,type,season,episode,src,startSecs){
   const fr=document.getElementById('vix-frame');if(!fr)return;
   const seq=++playerStreamSeq,fallback=getEmbedUrl(id,type,season,episode,src,startSecs),providers=window.StreamGNProviders,anime=isAnimeSource(src);
   if(anime)setFrameMessage(fr,'Caricamento anime','Sto cercando una sorgente italiana valida per questo episodio.');
-  else{fr.removeAttribute('srcdoc');fr.src=providers?.hasBackend?.()?'about:blank':fallback;}
+  else{showIframePlayer(fr);fr.removeAttribute('srcdoc');fr.src=providers?.hasBackend?.()?'about:blank':fallback;}
   const result=await withTimeout(resolveStreamResult(id,type,season,episode,src,startSecs),anime?12000:18000,'anime provider timeout');
   if(seq!==playerStreamSeq||String(currentTvId)!==String(id))return;
   const url=result?.embedUrl||result?.iframeUrl||result?.url||fallback;
   if(anime&&(!result?.ok||!isPlayablePlayerUrl(url,true))){
-    const searchUrl=providers?.animeSearchUrl?.(playerSessionAnimeTitles[0]||playerSessionTitle)||'';
-    setFrameMessage(fr,'Sorgente anime non disponibile','Serve il provider AnimeWorld-API/Tadako online per aprire direttamente questo episodio. Il sito non carica piu pagine AnimeWorld bloccate nell iframe.',searchUrl);
+    setFrameMessage(fr,'Provider anime non configurato','Per riprodurre questo episodio dentro StreaMGN serve un endpoint video diretto MP4/HLS configurato in animeWorldApiBase o streamApiBase.');
     return;
   }
+  if(isDirectVideoUrl(url)&&setNativeVideoSrc(url,startSecs))return;
+  showIframePlayer(fr);
   fr.removeAttribute('srcdoc');
   fr.src=url||fallback;
 }
@@ -1118,7 +1168,7 @@ async function openPlayer(id,type,title,poster,season,episode,isAnime){
   refreshCW();
 }
 async function loadEpisodesForPlayer(showId,season,preselect){const eSel=document.getElementById('e-sel');eSel.innerHTML='<option>Caricamento…</option>';try{const data=await tmdb(`/tv/${showId}/season/${season}`);const eps=data.episodes||[];if(!eps.length)throw Error('empty');eSel.innerHTML=eps.map(e=>`<option value="${e.episode_number}">Ep. ${e.episode_number}${e.name?' · '+e.name:''}</option>`).join('');if(preselect)eSel.value=String(preselect);}catch(e){eSel.innerHTML='<option value="1">Episodio 1</option>';}}
-function doClosePlayer(){pipActive=false;clearTimeout(epChangeTimer);clearTimeout(playerSourceHealthTimer);stopPlayerAutoSave(true);hideReminderOverlay();const fr=document.getElementById('vix-frame');smoothClose(document.getElementById('player-modal'),180,()=>{fr.src='';document.body.style.overflow='';document.getElementById('anime-note').style.display='none';document.getElementById('btn-anime-link').style.display='none';currentTvId=null;playerProgId=null;playerSessionTitle='';playerSessionPoster='';playerSessionIsAnime=false;playerSessionAnimeTitles=[];refreshCW();});}
+function doClosePlayer(){pipActive=false;clearTimeout(epChangeTimer);clearTimeout(playerSourceHealthTimer);stopPlayerAutoSave(true);hideReminderOverlay();const fr=document.getElementById('vix-frame');smoothClose(document.getElementById('player-modal'),180,()=>{fr.src='';fr.removeAttribute('srcdoc');fr.style.display='block';stopNativeVideo(true);document.body.style.overflow='';document.getElementById('anime-note').style.display='none';document.getElementById('btn-anime-link').style.display='none';currentTvId=null;playerProgId=null;playerSessionTitle='';playerSessionPoster='';playerSessionIsAnime=false;playerSessionAnimeTitles=[];refreshCW();});}
 function attemptClosePlayer(){hideReminderOverlay();doClosePlayer();}
 function closePlayer(){attemptClosePlayer();}
 document.getElementById('btn-player-back').addEventListener('click',attemptClosePlayer);
@@ -1134,6 +1184,14 @@ const isSafari=/^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 let pipActive=false;
 
 async function activatePiP(silent=false){
+  const video=document.getElementById('stream-video');
+  if(video&&video.style.display!=='none'&&video.src){
+    try{
+      if(document.pictureInPictureElement!==video&&video.requestPictureInPicture){await video.requestPictureInPicture();pipActive=true;if(!silent)showToast('Picture in Picture attivo ⧉');return;}
+      if(video.webkitEnterFullscreen){video.webkitEnterFullscreen();pipActive=true;if(!silent)showToast('✅ PiP pronto — premi Home per continuare');return;}
+      if(video.requestFullscreen){await video.requestFullscreen();pipActive=true;if(!silent)showToast('✅ Fullscreen — premi Home per il PiP');return;}
+    }catch(e){if(!silent)showToast('Avvia il video poi premi Home');return;}
+  }
   const fr=document.getElementById('vix-frame');
   if(!fr||!fr.src)return;
 
