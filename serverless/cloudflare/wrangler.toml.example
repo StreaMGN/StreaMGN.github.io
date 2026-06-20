@@ -7,10 +7,7 @@ CORS_ORIGIN = "https://streamgn.github.io"
 SPORT_URL = "https://pepperstream.xyz/index.php"
 MOVIE_PROVIDERS = "vixsrc"
 TV_PROVIDERS = "vixsrc"
-ANIME_PROVIDERS = "animeworld,tadako"
+ANIME_PROVIDERS = "streamrip"
 SPORT_PROVIDERS = "configured"
-ANIMEWORLD_BASE_URL = "https://www.animeworld.ac"
-# Optional: point this to a private wrapper based on MainKronos/AnimeWorld-API.
-ANIMEWORLD_API_BASE = ""
-# Optional: point this to a private Tadako wrapper endpoint.
-TADAKO_API_BASE = ""
+STREAMRIP_BASE_URL = "https://streamrip-website-production.up.railway.app"
+ANILIST_API_BASE = "https://graphql.anilist.co"

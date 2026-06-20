@@ -2,7 +2,7 @@
 
 Questo backend e opzionale: il sito resta compatibile con GitHub Pages.
 Quando `streamApiBase` in `assets/config.js` e vuoto, il frontend usa i fallback locali.
-Quando `streamApiBase` punta al Worker, il frontend chiede sempre al backend.
+Quando `streamApiBase` punta al Worker, il frontend chiede al backend.
 
 ## Architettura
 
@@ -25,7 +25,7 @@ Cloudflare Worker
 - `GET /health`
 - `GET /play/movie/:id`
 - `GET /play/tv/:id/:season/:episode`
-- `GET /play/anime/:id?title=...&season=1&episode=1`
+- `GET /play/anime/:id?anilistId=16498&flatEpisode=1`
 - `GET /sport/live`
 
 Ogni endpoint risponde con:
@@ -33,7 +33,7 @@ Ogni endpoint risponde con:
 ```json
 {
   "ok": true,
-  "provider": "vixsrc",
+  "provider": "streamrip",
   "embedUrl": "https://..."
 }
 ```
@@ -44,16 +44,10 @@ Configura i provider con variabili Cloudflare:
 
 - `MOVIE_PROVIDERS=vixsrc`
 - `TV_PROVIDERS=vixsrc`
-- `ANIME_PROVIDERS=animeworld,tadako`
+- `ANIME_PROVIDERS=streamrip`
 - `SPORT_PROVIDERS=configured`
 
-Anime usa fallback automatico:
-
-```text
-AnimeWorld
-  -> Tadako
-  -> errore JSON
-```
+Gli anime usano solo Streamrip. Il frontend risolve automaticamente l'ID AniList e invia anche `flatEpisode`, perche Streamrip usa una numerazione episodio piatta.
 
 ## Deploy Cloudflare Workers
 
@@ -74,9 +68,6 @@ streamApiBase: 'https://api.streamgn.it'
 
 ## Note provider anime
 
-- `animeworld` usa il wrapper Vercel in `serverless/vercel/animeworld-api`, configurabile con `ANIMEWORLD_API_BASE`.
-- `tadako` richiede un piccolo servizio wrapper Node/TypeScript, configurabile con `TADAKO_API_BASE`.
-- Il frontend invia sempre `title`, eventuali `titles` alternativi, `id`, `season` ed `episode`.
-- Un wrapper AnimeWorld/Tadako compatibile puo esporre `GET /play`, `GET /stream`, `GET /find` o `GET /search` e deve rispondere con `embedUrl`, `iframeUrl`, `url` o `streamUrl`.
-- Per evitare caricamenti infiniti, il frontend non usa piu lo scraping AnimeWorld diretto dal browser: senza wrapper/API configurata mostra errore gestito.
-- Il frontend non deve cambiare se in futuro sostituisci AnimeWorld, Tadako o Sport.
+- `STREAMRIP_BASE_URL` controlla la base dell'iframe anime.
+- `ANILIST_API_BASE` controlla la risoluzione titolo -> AniList, se serve farla lato Worker.
+- Il frontend continua a funzionare anche senza Worker.

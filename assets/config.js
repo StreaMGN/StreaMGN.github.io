@@ -22,15 +22,15 @@ window.STREAMGN_CONFIG = {
   streamProviders: {
     movie: ['vixsrc'],
     tv: ['vixsrc'],
-    anime: ['animeworld', 'tadako'],
+    anime: ['streamrip'],
     sport: ['configured']
   },
   streamUiSources: {
     normal: ['vixsrc', 'vidsrc', 'embed'],
-    anime: ['anime']
+    anime: ['streamrip']
   },
-  animeWorldBaseUrl: 'https://www.animeworld.ac',
-  animeWorldApiBase: '',
+  streamripBaseUrl: 'https://streamrip-website-production.up.railway.app',
+  aniListApiBase: 'https://graphql.anilist.co',
   tmdbCacheMaxAge: 6 * 60 * 60 * 1000,
   tmdbCacheMaxItems: 260,
   notificationInterval: 6 * 60 * 60 * 1000
