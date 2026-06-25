@@ -10,6 +10,7 @@ window.STREAMGN_CONFIG = {
     still: 'https://image.tmdb.org/t/p/w300'
   },
   sportDefaultUrl: 'https://pepperstream.xyz/index.php',
+  animeUnityUrl: 'https://www.animeunity.so',
   remoteConfigUrl: 'assets/remote-config.json',
   sportAdminEditUrl: 'https://github.com/StreaMGN/StreaMGN.github.io/edit/main/assets/remote-config.json',
   streamApiBase: '',

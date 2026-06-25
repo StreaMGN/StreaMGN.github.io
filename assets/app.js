@@ -19,6 +19,7 @@ function sourceListFromConfig(kind,fallback){return (CONFIG.streamUiSources?.[ki
 const SOURCES_NORMAL=sourceListFromConfig('normal',['vixsrc','vidsrc','embed']);
 const SOURCES_ANIME=sourceListFromConfig('anime',['anime']);
 const SPORT_DEFAULT_URL=CONFIG.sportDefaultUrl||'https://pepperstream.xyz/index.php';
+const ANIME_UNITY_URL=CONFIG.animeUnityUrl||'https://www.animeunity.so';
 const REMOTE_CONFIG_URL=CONFIG.remoteConfigUrl||'assets/remote-config.json';
 const SPORT_ADMIN_EDIT_URL=CONFIG.sportAdminEditUrl||'https://github.com/StreaMGN/StreaMGN.github.io/edit/main/assets/remote-config.json';
 const PROVIDERS=[{name:'Netflix',id:8,c:'#e50914'},{name:'Prime Video',id:9,c:'#00a8e1'},{name:'Disney+',id:337,c:'#1133cc'},{name:'Apple TV+',id:350,c:'#aaa'},{name:'Paramount+',id:531,c:'#0055ff'},{name:'NOW',id:39,c:'#00b4b4'}];
@@ -898,20 +899,11 @@ async function animeSection(container,title,path,params,type='tv',tag=''){
   }catch(e){}
 }
 async function loadAnime(){
-  if(loaded.anime)return;loaded.anime=true;
-  const el=document.getElementById('anime-secs');el.innerHTML='<div class="spin-wrap"><div class="spinner"></div></div>';
-  try{
-    el.innerHTML='';
-    await Promise.all([
-      animeSection(el,'Anime in tendenza','/discover/tv',{with_genres:16,with_origin_country:'JP',vote_count_gte:80},'tv'),
-      animeSection(el,'Serie anime popolari','/discover/tv',{with_genres:16,with_origin_country:'JP',vote_average_gte:7},'tv'),
-      animeSection(el,'Film anime','/discover/movie',{with_genres:16,with_original_language:'ja',vote_count_gte:40},'movie'),
-      animeSection(el,'Azione anime','/discover/tv',{with_genres:16,with_keywords:210024,with_origin_country:'JP'},'tv','genre'),
-      animeSection(el,'Romance anime','/discover/tv',{with_genres:16,with_keywords:9840,with_origin_country:'JP'},'tv','genre'),
-      animeSection(el,'Anime recenti','/discover/tv',{with_genres:16,with_origin_country:'JP',first_air_date_gte:'2024-01-01'},'tv')
-    ]);
-    if(!el.querySelector('.section'))el.innerHTML+='<div class="empty">Nessun anime trovato. Riprova tra poco.</div>';
-  }catch(e){el.innerHTML='<div class="err">Errore nel caricamento anime.</div>';}
+  const url=normalizeUrl(ANIME_UNITY_URL),frame=document.getElementById('anime-iframe'),label=document.getElementById('anime-url-label'),open=document.getElementById('anime-open-link');
+  loaded.anime=true;
+  if(label)label.textContent=url;
+  if(open)open.href=url;
+  if(frame&&frame.dataset.url!==url){frame.dataset.url=url;frame.src=url;}
 }
 
 /* RENDER HELPERS */
@@ -1428,6 +1420,7 @@ async function copySportConfig(){
 }
 document.getElementById('btn-sport-refresh')?.addEventListener('click',()=>loadSport(true));
 document.getElementById('btn-sport-copy-config')?.addEventListener('click',copySportConfig);
+document.getElementById('btn-anime-refresh')?.addEventListener('click',()=>{const frame=document.getElementById('anime-iframe');if(frame){frame.dataset.url='';frame.src='';}loaded.anime=false;loadAnime();});
 document.querySelectorAll('.nav-btn[data-page]').forEach(b=>b.addEventListener('click',()=>{const pg=b.dataset.page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+pg).classList.add('active');document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');if(pg==='sport')loadSport();if(pg==='serie'&&!loaded.serie)loadSerie();if(pg==='film'&&!loaded.film)loadFilm();if(pg==='anime'&&!loaded.anime)loadAnime();if(pg==='profilo')loadProfilo();if(pg==='liste')renderListePage();}));
 document.addEventListener('click',e=>{if(e.target.closest('[data-nav-home]')){if(document.getElementById('player-modal').classList.contains('open')){attemptClosePlayer();return;}if(document.getElementById('detail-modal').classList.contains('open'))closeDetail();else if(document.getElementById('actor-modal').classList.contains('open'))closeActor();else navigateHome();}});
 

@@ -573,13 +573,15 @@ main{padding-bottom:5rem}
 /* ============================================================
    SPORT — FIX: occupa solo lo spazio sotto la navbar (58px)
    ============================================================ */
-#page-sport{flex-direction:column;height:calc(100vh - 58px - env(safe-area-inset-top,0px));padding:0;overflow:hidden;margin-bottom:-5rem}
-#page-sport.active{display:flex}
-#sport-iframe-wrap{flex:1;position:relative;overflow:hidden}
-#sport-iframe{width:100%;height:100%;border:none;display:block}
+#page-sport,#page-anime{flex-direction:column;height:calc(100vh - 58px - env(safe-area-inset-top,0px));padding:0;overflow:hidden;margin-bottom:-5rem}
+#page-sport.active,#page-anime.active{display:flex}
+#sport-iframe-wrap,#anime-iframe-wrap{flex:1;position:relative;overflow:hidden}
+#sport-iframe,#anime-iframe{width:100%;height:100%;border:none;display:block}
 .sp-iframe-bar{display:flex;align-items:center;gap:10px;padding:0 16px;height:48px;background:var(--topbar-bg);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);border-bottom:.5px solid var(--b1);flex-shrink:0}
 .sp-live-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;background:rgba(48,209,88,.12);border:.5px solid rgba(48,209,88,.34);color:var(--green);font-size:.72rem;font-weight:800;white-space:nowrap}
 .sp-live-pill::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 14px rgba(48,209,88,.9)}
+.anime-pill{background:rgba(90,200,250,.12);border-color:rgba(90,200,250,.34);color:var(--blue)}
+.anime-pill::before{background:var(--blue);box-shadow:0 0 14px rgba(90,200,250,.85)}
 .sp-iframe-url{flex:1;font-size:.75rem;color:var(--tx);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:var(--s1);border:.5px solid var(--b1);border-radius:999px;padding:6px 10px}
 .sp-iframe-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 13px;background:var(--s1);border:.5px solid var(--b1);border-radius:980px;color:var(--tx2);font-size:.75rem;font-family:var(--font);cursor:pointer;transition:all var(--sm) var(--ease-out),transform var(--xs) var(--spring);white-space:nowrap;text-decoration:none;will-change:transform}
 .sp-iframe-btn:hover{background:var(--s2);color:var(--tx)}
@@ -625,7 +627,7 @@ main{padding-bottom:5rem}
   .hero{height:420px}.hero-title{font-size:2.2rem}.hero-body{padding:1.5rem}
   nav{padding:0 10px;height:52px}
   .theme-select{max-width:74px;font-size:.66rem;padding:0 7px}
-  #page-sport.active{height:calc(100vh - 52px - env(safe-area-inset-top,0px))}
+  #page-sport.active,#page-anime.active{height:calc(100vh - 52px - env(safe-area-inset-top,0px))}
   .sp-iframe-bar{padding:0 10px;gap:6px}
   .sp-live-pill{display:none}
   .sp-admin-panel{flex-wrap:wrap;padding:10px}
