@@ -1579,7 +1579,7 @@ async function showSystemUpdateNotification(created,data,now){
   if(!canShowPush(data,now))return;
   const top=created[0],extra=created.length>1?` + altri ${created.length-1}`:'';
   const body=created.length===1?top.desc:`${top.title}: ${top.desc}${extra}`;
-  const opts={body,icon:'assets/streamgn-logo.png',badge:'assets/streamgn-logo.png',tag:'streamgn-updates',renotify:false,data:{url:'./?page=profilo',itemId:top.itemId,type:top.type,poster:top.poster||''}};
+  const opts={body,icon:'assets/icons/icon-192.png',badge:'assets/icons/icon-96.png',tag:'streamgn-updates',renotify:false,data:{url:'./?page=profilo',itemId:top.itemId,type:top.type,poster:top.poster||''}};
   try{
     const reg=await navigator.serviceWorker?.ready;
     if(reg?.showNotification){await reg.showNotification('StreaMGN',opts);return;}

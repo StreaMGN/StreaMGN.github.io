@@ -5,10 +5,10 @@ const API='https://api.themoviedb.org/3';
 const DB_NAME='streamgn-db';
 const STORE='kv';
 const INTERVAL=6*60*60*1000;
-const CACHE='streamgn-v15';
+const CACHE='streamgn-v16';
 const IMG='https://image.tmdb.org/t/p/w780';
 
-self.addEventListener('install',event=>{self.skipWaiting();event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(['./','./index.html','./assets/styles.css','./assets/config.js','./assets/providers.js','./assets/app.js','./assets/remote-config.json','./assets/streamgn-logo.png','./manifest.webmanifest']).catch(()=>{})));});
+self.addEventListener('install',event=>{self.skipWaiting();event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(['./','./index.html','./favicon.ico','./manifest.webmanifest','./assets/styles.css','./assets/config.js','./assets/providers.js','./assets/app.js','./assets/remote-config.json','./assets/streamgn-logo.png','./assets/icons/favicon-16.png','./assets/icons/favicon-32.png','./assets/icons/icon-96.png','./assets/icons/icon-120.png','./assets/icons/icon-144.png','./assets/icons/icon-152.png','./assets/icons/icon-167.png','./assets/icons/icon-180.png','./assets/icons/icon-192.png','./assets/icons/icon-256.png','./assets/icons/icon-384.png','./assets/icons/icon-512.png','./assets/icons/icon-maskable-512.png','./assets/icons/streamgn-social.png']).catch(()=>{})));});
 self.addEventListener('activate',event=>{event.waitUntil(Promise.all([self.clients.claim(),caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('streamgn-')&&k!==CACHE).map(k=>caches.delete(k))))]));});
 self.addEventListener('fetch',event=>{if(event.request.method!=='GET')return;event.respondWith(fetch(event.request).catch(()=>caches.match(event.request)));});
 
@@ -132,8 +132,8 @@ async function checkUpdates(force=false){
     try{
       await self.registration.showNotification('StreaMGN',{
         body:created.length===1?top.desc:`${top.title}: ${top.desc}${extra}`,
-        icon:'./assets/streamgn-logo.png',
-        badge:'./assets/streamgn-logo.png',
+        icon:'./assets/icons/icon-192.png',
+        badge:'./assets/icons/icon-96.png',
         image:top.poster?`${IMG}${top.poster}`:undefined,
         tag:'streamgn-updates',
         renotify:false,
