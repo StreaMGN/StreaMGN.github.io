@@ -577,6 +577,15 @@ main{padding-bottom:5rem}
 #page-sport.active,#page-anime.active{display:flex}
 #sport-iframe-wrap,#anime-iframe-wrap{flex:1;position:relative;overflow:hidden}
 #sport-iframe,#anime-iframe{width:100%;height:100%;border:none;display:block}
+.iframe-fallback{position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;padding:24px;background:linear-gradient(180deg,rgba(0,0,0,.96),rgba(12,12,12,.98));color:#fff}
+.iframe-fallback[hidden]{display:none!important}
+.iframe-fallback-box{width:min(460px,100%);padding:28px;border:.5px solid rgba(255,255,255,.14);border-radius:18px;background:rgba(255,255,255,.06);box-shadow:0 24px 80px rgba(0,0,0,.38);text-align:left}
+.iframe-fallback-kicker{font-size:.64rem;font-weight:900;letter-spacing:1.6px;text-transform:uppercase;color:rgba(255,255,255,.42);margin-bottom:10px}
+.iframe-fallback-title{font-size:1.25rem;font-weight:900;letter-spacing:-.5px;line-height:1.12;margin-bottom:10px}
+.iframe-fallback-sub{font-size:.85rem;line-height:1.55;color:rgba(255,255,255,.58);margin-bottom:18px}
+.iframe-fallback-actions{display:flex;gap:8px;flex-wrap:wrap}
+.iframe-fallback-primary{background:#fff;color:#000;border-color:#fff;font-weight:800}
+.iframe-fallback-primary:hover{background:rgba(255,255,255,.86);color:#000}
 .sp-iframe-bar{display:flex;align-items:center;gap:10px;padding:0 16px;height:48px;background:var(--topbar-bg);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);border-bottom:.5px solid var(--b1);flex-shrink:0}
 .sp-live-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;background:rgba(48,209,88,.12);border:.5px solid rgba(48,209,88,.34);color:var(--green);font-size:.72rem;font-weight:800;white-space:nowrap}
 .sp-live-pill::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 14px rgba(48,209,88,.9)}

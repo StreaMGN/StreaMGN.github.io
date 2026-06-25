@@ -22,6 +22,7 @@ const SPORT_DEFAULT_URL=CONFIG.sportDefaultUrl||'https://pepperstream.xyz/index.
 const ANIME_UNITY_URL=CONFIG.animeUnityUrl||'https://www.animeunity.so';
 const REMOTE_CONFIG_URL=CONFIG.remoteConfigUrl||'assets/remote-config.json';
 const SPORT_ADMIN_EDIT_URL=CONFIG.sportAdminEditUrl||'https://github.com/StreaMGN/StreaMGN.github.io/edit/main/assets/remote-config.json';
+const FRAME_BLOCKED_HOSTS=['animeunity.so','www.animeunity.so','pepperstream.xyz','www.pepperstream.xyz'];
 const PROVIDERS=[{name:'Netflix',id:8,c:'#e50914'},{name:'Prime Video',id:9,c:'#00a8e1'},{name:'Disney+',id:337,c:'#1133cc'},{name:'Apple TV+',id:350,c:'#aaa'},{name:'Paramount+',id:531,c:'#0055ff'},{name:'NOW',id:39,c:'#00b4b4'}];
 const MV_GENRES=[{name:'Tutti',id:null},{name:'Thriller',id:53},{name:'Crime',id:80},{name:'Romantico',id:10749},{name:'Azione',id:28},{name:'Horror',id:27},{name:'Sci-Fi',id:878},{name:'Commedia',id:35},{name:'Dramma',id:18},{name:'Avventura',id:12}];
 const TV_GENRES=[{name:'Tutti',id:null},{name:'Crime',id:80},{name:'Dramma',id:18},{name:'Commedia',id:35},{name:'Sci-Fi',id:10765},{name:'Mistero',id:9648},{name:'Reality',id:10764},{name:'Action',id:10759}];
@@ -903,7 +904,7 @@ async function loadAnime(){
   loaded.anime=true;
   if(label)label.textContent=url;
   if(open)open.href=url;
-  if(frame&&frame.dataset.url!==url){frame.dataset.url=url;frame.src=url;}
+  setExternalFrame('anime',url,frame);
 }
 
 /* RENDER HELPERS */
@@ -1390,6 +1391,31 @@ async function fetchRemoteConfig(force=false){
   return sportRemoteConfig;
 }
 function sportUrlFromConfig(cfg){return normalizeUrl(cfg?.sportUrl||cfg?.sport?.url||SPORT_DEFAULT_URL)||SPORT_DEFAULT_URL;}
+function isKnownFrameBlocked(url){
+  try{return FRAME_BLOCKED_HOSTS.includes(new URL(normalizeUrl(url),location.href).hostname.toLowerCase());}
+  catch(e){return false;}
+}
+function showIframeFallback(kind,url){
+  const panel=document.getElementById(`${kind}-iframe-fallback`),open=document.getElementById(`${kind}-fallback-open`);
+  if(open)open.href=url;
+  if(panel)panel.hidden=false;
+}
+function hideIframeFallback(kind){
+  const panel=document.getElementById(`${kind}-iframe-fallback`);
+  if(panel)panel.hidden=true;
+}
+function setExternalFrame(kind,url,frame,force=false){
+  if(!frame)return;
+  if(isKnownFrameBlocked(url)){
+    frame.dataset.url=url;
+    frame.src='about:blank';
+    showIframeFallback(kind,url);
+    return;
+  }
+  hideIframeFallback(kind);
+  frame.removeAttribute('sandbox');
+  if(force||frame.dataset.url!==url){frame.dataset.url=url;frame.src=url;}
+}
 function renderSportAdmin(url){
   const panel=document.getElementById('sport-admin-panel'),link=document.getElementById('sport-admin-link'),input=document.getElementById('sport-admin-input');
   const admin=isSportAdminMode();
@@ -1408,7 +1434,7 @@ async function loadSport(force=false){
   if(label)label.textContent=url;
   if(open)open.href=url;
   renderSportAdmin(url);
-  if(si){si.removeAttribute('sandbox');if(force||si.dataset.url!==url){si.dataset.url=url;si.src=url;}}
+  setExternalFrame('sport',url,si,force);
 }
 async function copySportConfig(){
   const input=document.getElementById('sport-admin-input');
@@ -1419,8 +1445,10 @@ async function copySportConfig(){
   catch(e){prompt('Copia questa config',text);}
 }
 document.getElementById('btn-sport-refresh')?.addEventListener('click',()=>loadSport(true));
+document.getElementById('btn-sport-fallback-refresh')?.addEventListener('click',()=>loadSport(true));
 document.getElementById('btn-sport-copy-config')?.addEventListener('click',copySportConfig);
 document.getElementById('btn-anime-refresh')?.addEventListener('click',()=>{const frame=document.getElementById('anime-iframe');if(frame){frame.dataset.url='';frame.src='';}loaded.anime=false;loadAnime();});
+document.getElementById('btn-anime-fallback-refresh')?.addEventListener('click',()=>{const frame=document.getElementById('anime-iframe');if(frame){frame.dataset.url='';frame.src='';}loaded.anime=false;loadAnime();});
 document.querySelectorAll('.nav-btn[data-page]').forEach(b=>b.addEventListener('click',()=>{const pg=b.dataset.page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+pg).classList.add('active');document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');if(pg==='sport')loadSport();if(pg==='serie'&&!loaded.serie)loadSerie();if(pg==='film'&&!loaded.film)loadFilm();if(pg==='anime'&&!loaded.anime)loadAnime();if(pg==='profilo')loadProfilo();if(pg==='liste')renderListePage();}));
 document.addEventListener('click',e=>{if(e.target.closest('[data-nav-home]')){if(document.getElementById('player-modal').classList.contains('open')){attemptClosePlayer();return;}if(document.getElementById('detail-modal').classList.contains('open'))closeDetail();else if(document.getElementById('actor-modal').classList.contains('open'))closeActor();else navigateHome();}});
 

@@ -233,7 +233,20 @@
       <button class="sp-iframe-btn" id="btn-sport-copy-config">Copia config</button>
       <span class="sp-admin-help">Modifica il file remoto su GitHub: il link cambia per tutti.</span>
     </div>
-    <div id="sport-iframe-wrap"><iframe id="sport-iframe" src="" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" referrerpolicy="no-referrer" allowfullscreen></iframe></div>
+    <div id="sport-iframe-wrap">
+      <iframe id="sport-iframe" src="" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" referrerpolicy="no-referrer" allowfullscreen></iframe>
+      <div class="iframe-fallback" id="sport-iframe-fallback" hidden>
+        <div class="iframe-fallback-box">
+          <div class="iframe-fallback-kicker">Apertura integrata bloccata</div>
+          <div class="iframe-fallback-title">Questo sito non permette la navigazione dentro StreaMGN</div>
+          <div class="iframe-fallback-sub">Il browser blocca l'iframe prima che la pagina possa caricarsi.</div>
+          <div class="iframe-fallback-actions">
+            <a class="sp-iframe-btn iframe-fallback-primary" id="sport-fallback-open" href="https://pepperstream.xyz/index.php" target="_blank" rel="noopener">Apri fuori</a>
+            <button class="sp-iframe-btn" id="btn-sport-fallback-refresh">Aggiorna</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
   <div id="page-serie" class="page"><div class="pg-header"><span class="pg-title">Serie TV</span><button class="random-btn" data-random="serie">🎲 Scegli per me</button></div><div class="filter-bar" id="filter-serie"></div><div class="sections-wrap" id="serie-secs"></div></div>
   <div id="page-film" class="page"><div class="pg-header"><span class="pg-title">Film</span><button class="random-btn" data-random="film">🎲 Scegli per me</button></div><div class="filter-bar" id="filter-film"></div><div class="sections-wrap" id="film-secs"></div></div>
@@ -244,7 +257,20 @@
       <button class="sp-iframe-btn" id="btn-anime-refresh">Aggiorna</button>
       <a class="sp-iframe-btn" id="anime-open-link" href="https://www.animeunity.so" target="_blank" rel="noopener"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Apri fuori</a>
     </div>
-    <div id="anime-iframe-wrap"><iframe id="anime-iframe" src="" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" referrerpolicy="no-referrer" allowfullscreen></iframe></div>
+    <div id="anime-iframe-wrap">
+      <iframe id="anime-iframe" src="" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" referrerpolicy="no-referrer" allowfullscreen></iframe>
+      <div class="iframe-fallback" id="anime-iframe-fallback" hidden>
+        <div class="iframe-fallback-box">
+          <div class="iframe-fallback-kicker">Apertura integrata bloccata</div>
+          <div class="iframe-fallback-title">AnimeUnity non permette la navigazione dentro StreaMGN</div>
+          <div class="iframe-fallback-sub">Il browser blocca l'iframe prima che la pagina possa caricarsi.</div>
+          <div class="iframe-fallback-actions">
+            <a class="sp-iframe-btn iframe-fallback-primary" id="anime-fallback-open" href="https://www.animeunity.so" target="_blank" rel="noopener">Apri fuori</a>
+            <button class="sp-iframe-btn" id="btn-anime-fallback-refresh">Aggiorna</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
   <div id="page-profilo" class="page"><div class="profile-wrap" id="profile-wrap"><div class="spin-wrap"><div class="spinner"></div></div></div></div>
   <div id="page-liste" class="page"><div class="pg-header"><span class="pg-title">Le mie liste</span></div><div class="liste-create-row"><button class="gbtn" id="btn-new-list">Nuova lista</button><button class="gbtn" id="btn-export-lists">📤 Esporta liste</button><button class="gbtn" id="btn-backup-all">💾 Backup completo</button><button class="gbtn" id="btn-import-lists">📥 Importa</button><button class="gbtn gbtn-red" id="btn-clean-lists">Ripristina liste</button><select class="gsel" id="liste-sort"><option value="recent">Aggiunti di recente</option><option value="title">Titolo</option><option value="rating">Voto</option><option value="progress">Progresso</option></select></div><div class="liste-filter-bar" id="liste-filter-bar"><button class="list-filter-btn active" data-list-filter="all">Tutto</button><button class="list-filter-btn" data-list-filter="started">Iniziati</button><button class="list-filter-btn" data-list-filter="completed">Completati</button><button class="list-filter-btn" data-list-filter="queued">Da vedere</button></div><div id="liste-body"></div></div>
