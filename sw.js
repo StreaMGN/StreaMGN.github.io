@@ -5,9 +5,11 @@ const API='https://api.themoviedb.org/3';
 const DB_NAME='streamgn-db';
 const STORE='kv';
 const INTERVAL=6*60*60*1000;
+const CACHE='streamgn-v15';
+const IMG='https://image.tmdb.org/t/p/w780';
 
-self.addEventListener('install',event=>{self.skipWaiting();event.waitUntil(caches.open('streamgn-v14').then(cache=>cache.addAll(['./','./index.html','./assets/styles.css','./assets/config.js','./assets/providers.js','./assets/app.js','./assets/remote-config.json','./assets/streamgn-logo.png','./manifest.webmanifest']).catch(()=>{})));});
-self.addEventListener('activate',event=>{event.waitUntil(Promise.all([self.clients.claim(),caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('streamgn-')&&k!=='streamgn-v14').map(k=>caches.delete(k))))]));});
+self.addEventListener('install',event=>{self.skipWaiting();event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(['./','./index.html','./assets/styles.css','./assets/config.js','./assets/providers.js','./assets/app.js','./assets/remote-config.json','./assets/streamgn-logo.png','./manifest.webmanifest']).catch(()=>{})));});
+self.addEventListener('activate',event=>{event.waitUntil(Promise.all([self.clients.claim(),caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('streamgn-')&&k!==CACHE).map(k=>caches.delete(k))))]));});
 self.addEventListener('fetch',event=>{if(event.request.method!=='GET')return;event.respondWith(fetch(event.request).catch(()=>caches.match(event.request)));});
 
 function openDB(){
@@ -39,60 +41,126 @@ async function tmdb(path,extra={}){
   if(!r.ok)throw Error(r.status);
   return r.json();
 }
-async function getTrackedWatchingSeries(){
+function notifDefault(){return{items:[],snapshots:{},lastCheck:0,pushStats:{day:'',count:0,lastPushAt:0}};}
+function dayKey(ts=Date.now()){return new Date(ts).toISOString().slice(0,10);}
+function daysUntil(date,now=Date.now()){if(!date)return null;const t=new Date(`${date}T12:00:00Z`).getTime();if(!Number.isFinite(t))return null;return Math.ceil((t-now)/86400000);}
+function addNotif(data,created,notif){
+  if(!notif?.id||data.items.some(n=>n.id===notif.id))return;
+  const next={ts:Date.now(),read:false,category:'news',priority:2,...notif};
+  data.items.unshift(next);
+  created.push(next);
+}
+function canShowPush(data,now){
+  data.pushStats=data.pushStats||{day:'',count:0,lastPushAt:0};
+  const today=dayKey(now);
+  if(data.pushStats.day!==today)data.pushStats={day:today,count:0,lastPushAt:0};
+  if(data.pushStats.count>=3)return false;
+  if(now-(data.pushStats.lastPushAt||0)<8*60*60*1000)return false;
+  data.pushStats.count++;
+  data.pushStats.lastPushAt=now;
+  return true;
+}
+async function getTrackedItems(){
   const watching=await readKey('svx_w',{});
   const folders=await readKey('svx_f',{});
   const seen=new Set(),items=[];
-  const add=item=>{if(!item||item.type!=='tv')return;const id=String(item.id);if(seen.has(id))return;seen.add(id);items.push(item);};
+  const add=item=>{
+    if(!item||!item.id)return;
+    const type=item.type||item.media_type;
+    if(type!=='tv'&&type!=='movie')return;
+    const key=`${type}_${item.id}`;
+    if(seen.has(key))return;
+    seen.add(key);items.push({...item,type});
+  };
   Object.values(watching).forEach(add);
   Object.values(folders).forEach(folder=>(folder.items||[]).forEach(add));
   return items;
 }
 async function checkUpdates(force=false){
-  const data=await readKey('svx_notif',{items:[],snapshots:{},lastCheck:0});
+  const data={...notifDefault(),...await readKey('svx_notif',notifDefault())};
   const now=Date.now();
   if(!force&&now-(data.lastCheck||0)<INTERVAL)return 0;
-  let newCount=0;
-  const tracked=await getTrackedWatchingSeries();
-  for(const item of tracked){
+  data.snapshots=data.snapshots||{};
+  data.snapshots.upcomingNotified=data.snapshots.upcomingNotified||{};
+  const created=[];
+  const tracked=await getTrackedItems();
+  for(const item of tracked.slice(0,80)){
     try{
-      const info=await tmdb(`/tv/${item.id}`,{},true);
-      const snap=data.snapshots[item.id]||{};
-      const seasons=info.number_of_seasons||0,eps=info.number_of_episodes||0,lastEp=info.last_episode_to_air,nextEp=info.next_episode_to_air,poster=info.poster_path||item.poster||'';
-      if(!snap.seasons&&!snap.eps){data.snapshots[item.id]={seasons,eps,lastEpId:lastEp?.id||null,nextEp:nextEp||null};continue;}
-      if(seasons>snap.seasons){
-        const notif={id:`s_${item.id}_${seasons}`,itemId:item.id,type:'tv',title:item.title||info.name,poster,desc:`Stagione ${seasons} disponibile!`,ts:now,read:false};
-        if(!data.items.find(n=>n.id===notif.id)){data.items.unshift(notif);newCount++;}
-      }else if(eps>snap.eps&&lastEp){
-        const epLabel=`S${lastEp.season_number}E${lastEp.episode_number}${lastEp.name?' · '+lastEp.name:''}`;
-        const notif={id:`e_${item.id}_${lastEp.id}`,itemId:item.id,type:'tv',title:item.title||info.name,poster,desc:`Nuovo episodio: ${epLabel}`,ts:now,read:false};
-        if(!data.items.find(n=>n.id===notif.id)){data.items.unshift(notif);newCount++;}
+      if(item.type==='tv'){
+        const info=await tmdb(`/tv/${item.id}`);
+        const snap=data.snapshots[item.id]||{};
+        const seasons=info.number_of_seasons||0,eps=info.number_of_episodes||0,lastEp=info.last_episode_to_air,nextEp=info.next_episode_to_air,poster=info.poster_path||item.poster||'';
+        if(!snap.seasons&&!snap.eps){data.snapshots[item.id]={seasons,eps,lastEpId:lastEp?.id||null,nextEpId:nextEp?.id||null};}
+        else if(seasons>snap.seasons){
+          addNotif(data,created,{id:`s_${item.id}_${seasons}`,itemId:item.id,type:'tv',title:item.title||info.name,poster,category:'list',priority:1,desc:`Nuova stagione disponibile: stagione ${seasons}`});
+        }else if(eps>snap.eps&&lastEp){
+          const epLabel=`S${lastEp.season_number}E${lastEp.episode_number}${lastEp.name?' · '+lastEp.name:''}`;
+          addNotif(data,created,{id:`e_${item.id}_${lastEp.id}`,itemId:item.id,type:'tv',title:item.title||info.name,poster,category:'list',priority:1,desc:`Nuovo episodio disponibile: ${epLabel}`});
+        }
+        const d=daysUntil(nextEp?.air_date,now),upKey=`tv_${item.id}_${nextEp?.id||nextEp?.air_date}`;
+        if(nextEp&&d!==null&&d>=0&&d<=10&&!data.snapshots.upcomingNotified[upKey]){
+          data.snapshots.upcomingNotified[upKey]=now;
+          addNotif(data,created,{id:`up_${upKey}`,itemId:item.id,type:'tv',title:item.title||info.name,poster,category:'upcoming',priority:2,desc:`Prossima uscita tra ${d===0?'oggi':d+' giorni'}: S${nextEp.season_number}E${nextEp.episode_number}`});
+        }
+        data.snapshots[item.id]={seasons,eps,lastEpId:lastEp?.id||null,nextEpId:nextEp?.id||null};
+      }else{
+        const info=await tmdb(`/movie/${item.id}`);
+        const d=daysUntil(info.release_date,now),upKey=`movie_${item.id}_${info.release_date}`;
+        if(d!==null&&d>=0&&d<=21&&!data.snapshots.upcomingNotified[upKey]){
+          data.snapshots.upcomingNotified[upKey]=now;
+          addNotif(data,created,{id:`up_${upKey}`,itemId:item.id,type:'movie',title:item.title||info.title,poster:info.poster_path||item.poster||'',category:'upcoming',priority:2,desc:`Uscita imminente tra ${d===0?'oggi':d+' giorni'}`});
+        }
       }
-      data.snapshots[item.id]={seasons,eps,lastEpId:lastEp?.id||null,nextEp:nextEp||null};
     }catch(e){}
   }
   try{
     const top=await tmdb('/trending/all/day',{region:'IT'});
-    const topItems=(top.results||[]).filter(x=>x.media_type==='movie'||x.media_type==='tv').slice(0,10);
-    const prev=data.snapshots.top10Ids||[],today=new Date(now).toISOString().slice(0,10);
-    topItems.forEach((item,idx)=>{
-      const key=`${item.media_type}_${item.id}`;
-      if(!prev.length||prev.includes(key))return;
-      const notif={id:`top10_${key}_${today}`,itemId:item.id,type:item.media_type,title:item.title||item.name,poster:item.poster_path||'',desc:`Nuovo in Top 10 #${idx+1}`,ts:now,read:false};
-      if(!data.items.find(n=>n.id===notif.id)){data.items.unshift(notif);newCount++;}
-    });
-    data.snapshots.top10Ids=topItems.map(x=>`${x.media_type}_${x.id}`);
+    const demand=(top.results||[]).filter(x=>x.media_type==='movie'||x.media_type==='tv').slice(0,8);
+    const ids=demand.map(x=>`${x.media_type}_${x.id}`),prev=data.snapshots.demandIds||[];
+    const fresh=demand.find((item,idx)=>prev.length&&idx<5&&!prev.includes(`${item.media_type}_${item.id}`));
+    if(fresh){
+      const key=`${fresh.media_type}_${fresh.id}_${dayKey(now)}`;
+      addNotif(data,created,{id:`demand_${key}`,itemId:fresh.id,type:fresh.media_type,title:fresh.title||fresh.name,poster:fresh.poster_path||'',category:'demand',priority:3,desc:'Nuova uscita molto richiesta in tendenza'});
+    }
+    data.snapshots.demandIds=ids;
   }catch(e){}
+  created.sort((a,b)=>(a.priority||9)-(b.priority||9));
   data.items=data.items.slice(0,80);
   data.lastCheck=now;
-  await writeKey('svx_notif',data);
-  if(newCount>0&&self.registration?.showNotification){
-    await self.registration.showNotification('StreaMGN',{body:`${newCount} nuovi aggiornamenti`,icon:'./assets/streamgn-logo.png',tag:'streamgn-updates',data:{url:'./?page=profilo'}});
+  if(created.length&&canShowPush(data,now)){
+    const top=created[0],extra=created.length>1?` + altri ${created.length-1}`:'';
+    try{
+      await self.registration.showNotification('StreaMGN',{
+        body:created.length===1?top.desc:`${top.title}: ${top.desc}${extra}`,
+        icon:'./assets/streamgn-logo.png',
+        badge:'./assets/streamgn-logo.png',
+        image:top.poster?`${IMG}${top.poster}`:undefined,
+        tag:'streamgn-updates',
+        renotify:false,
+        data:{url:`./?page=profilo`,itemId:top.itemId,type:top.type,poster:top.poster||''}
+      });
+    }catch(e){}
   }
-  return newCount;
+  await writeKey('svx_notif',data);
+  return created.length;
 }
 
 self.addEventListener('periodicsync',event=>{if(event.tag==='streamgn-updates')event.waitUntil(checkUpdates(false));});
 self.addEventListener('sync',event=>{if(event.tag==='streamgn-updates')event.waitUntil(checkUpdates(false));});
 self.addEventListener('message',event=>{if(event.data?.type==='CHECK_UPDATES')event.waitUntil(checkUpdates(false));});
-self.addEventListener('notificationclick',event=>{event.notification.close();const url=event.notification.data?.url||'./';event.waitUntil(clients.matchAll({type:'window',includeUncontrolled:true}).then(list=>{for(const client of list){if('focus' in client)return client.focus();}return clients.openWindow(url);}));});
+self.addEventListener('push',event=>{event.waitUntil(checkUpdates(true));});
+self.addEventListener('notificationclick',event=>{
+  event.notification.close();
+  const data=event.notification.data||{};
+  const url=data.itemId?`./?id=${encodeURIComponent(data.itemId)}&type=${encodeURIComponent(data.type||'tv')}`:(data.url||'./?page=profilo');
+  const target=new URL(url,self.registration.scope).href;
+  event.waitUntil(clients.matchAll({type:'window',includeUncontrolled:true}).then(list=>{
+    for(const client of list){
+      if('focus' in client){
+        if('navigate' in client)return client.navigate(target).then(c=>(c||client).focus());
+        return client.focus();
+      }
+    }
+    return clients.openWindow(target);
+  }));
+});

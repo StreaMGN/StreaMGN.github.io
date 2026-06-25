@@ -257,6 +257,20 @@ function initLiquidGlassMotion(){
 }
 initLiquidGlassMotion();
 
+function initLiquidGlassPointer(){
+  const els='.gbtn,.icon-btn,.theme-select,.nav-btn,.fchip,.list-filter-btn,.mood-chip,.sp-iframe-btn,.pip-btn,.folder-card,.premium-stat,.profile-pill,.search-bar,.pm-note-bar,.tv-controls,.player-tools,.fp-sheet,.confirm-box,.exp-sel-box,.imp-box,#notif-sheet,nav,.dm-topbar,.am-topbar,.pm-topbar,.sp-iframe-bar';
+  document.addEventListener('pointermove',e=>{
+    const el=e.target.closest?.(els);
+    if(!el)return;
+    const r=el.getBoundingClientRect();
+    el.style.setProperty('--glass-x',`${e.clientX-r.left}px`);
+    el.style.setProperty('--glass-y',`${e.clientY-r.top}px`);
+    el.style.setProperty('--glass-px',`${Math.round((e.clientX-r.left)/Math.max(r.width,1)*100)}%`);
+    el.style.setProperty('--glass-py',`${Math.round((e.clientY-r.top)/Math.max(r.height,1)*100)}%`);
+  },{passive:true});
+}
+initLiquidGlassPointer();
+
 /* SEARCH HISTORY */
 function getSH(){return readJSONKey('svx_sh',[]);}
 function addSH(q){try{q=String(q||'').trim();if(q.length<3)return;let h=getSH().filter(x=>x.toLowerCase()!==q.toLowerCase());h.unshift(q);writeJSONKey('svx_sh',h.slice(0,10));}catch(e){}}
@@ -1516,113 +1530,121 @@ setTimeout(()=>{try{const q=new URLSearchParams(location.search);let page=q.get(
 .notif-checking{padding:2rem;text-align:center;color:var(--tx3);font-size:.82rem;display:flex;flex-direction:column;align-items:center;gap:10px}
 `;document.head.appendChild(s);})();
 
-/* Storage notifiche */
-function getNotifData(){return readJSONKey('svx_notif',{items:[],snapshots:{},lastCheck:0});}
-function saveNotifData(d){writeJSONKey('svx_notif',d);}
+function notifDefault(){return{items:[],snapshots:{},lastCheck:0,pushStats:{day:'',count:0,lastPushAt:0}};}
+function getNotifData(){return{...notifDefault(),...readJSONKey('svx_notif',notifDefault())};}
+function saveNotifData(d){writeJSONKey('svx_notif',{...notifDefault(),...d});}
 function getUnreadCount(){return getNotifData().items.filter(n=>!n.read).length;}
+function dayKey(ts=Date.now()){return new Date(ts).toISOString().slice(0,10);}
+function daysUntil(date,now=Date.now()){if(!date)return null;const t=new Date(`${date}T12:00:00Z`).getTime();if(!Number.isFinite(t))return null;return Math.ceil((t-now)/86400000);}
+function addNotif(data,created,notif){
+  if(!notif?.id||data.items.some(n=>n.id===notif.id))return;
+  const next={ts:Date.now(),read:false,category:'news',priority:2,...notif};
+  data.items.unshift(next);
+  created.push(next);
+}
 
-/* Badge */
 function updateNotifBadge(){
   const cnt=getUnreadCount(),badge=document.getElementById('notif-badge');
   if(badge)badge.style.display=cnt>0?'block':'none';
 }
 
-/* Raccoglie solo le serie che l'utente sta davvero guardando */
-function getTrackedWatchingSeries(){
+function getTrackedContentItems(){
   const seen=new Set(),items=[];
   const add=item=>{
-    if(!item||item.type!=='tv')return;
-    const key=String(item.id);
+    if(!item||!item.id)return;
+    const type=item.type||item.media_type;
+    if(type!=='tv'&&type!=='movie')return;
+    const key=`${type}_${item.id}`;
     if(seen.has(key))return;
-    seen.add(key);items.push(item);
+    seen.add(key);items.push({...item,type});
   };
   Object.values(getWatching()).forEach(add);
   Object.values(getFolders()).forEach(f=>(f.items||[]).forEach(add));
   return items;
 }
+function getTrackedWatchingSeries(){return getTrackedContentItems().filter(item=>item.type==='tv');}
 
-/* Controlla aggiornamenti su TMDB */
-async function checkForUpdates(force=false){
-  const data=getNotifData();
-  const now=Date.now();
-  const INTERVAL=6*60*60*1000; // 6 ore
-  if(!force&&now-data.lastCheck<INTERVAL)return 0;
-
-  const items=getTrackedWatchingSeries();
-
-  let newCount=0;
-  const list=document.getElementById('notif-list');
-  if(list)list.innerHTML='<div class="notif-checking"><div class="spinner"></div><span>Controllo aggiornamenti…</span></div>';
-
-  for(const item of items){
-    try{
-      const info=await tmdb(`/tv/${item.id}`);
-      const snap=data.snapshots[item.id]||{};
-      const seasons=info.number_of_seasons||0;
-      const eps=info.number_of_episodes||0;
-      const lastEp=info.last_episode_to_air;
-      const nextEp=info.next_episode_to_air;
-      const poster=info.poster_path||item.poster||'';
-
-      // Prima volta — salva snapshot senza notifica
-      if(!snap.seasons&&!snap.eps){
-        data.snapshots[item.id]={seasons,eps,lastEpId:lastEp?.id||null};
-        continue;
-      }
-
-      // Nuova stagione
-      if(seasons>snap.seasons){
-        const notif={id:`s_${item.id}_${seasons}`,itemId:item.id,type:'tv',title:item.title,poster,
-          desc:`🎉 Stagione ${seasons} disponibile!`,ts:now,read:false};
-        if(!data.items.find(n=>n.id===notif.id)){data.items.unshift(notif);newCount++;}
-      }
-      // Nuovo episodio (stessa stagione)
-      else if(eps>snap.eps&&lastEp){
-        const epLabel=`S${lastEp.season_number}E${lastEp.episode_number}${lastEp.name?' · '+lastEp.name:''}`;
-        const notif={id:`e_${item.id}_${lastEp.id}`,itemId:item.id,type:'tv',title:item.title,poster,
-          desc:`▶ Nuovo episodio: ${epLabel}`,ts:now,read:false};
-        if(!data.items.find(n=>n.id===notif.id)){data.items.unshift(notif);newCount++;}
-      }
-
-      // Prossimo episodio in arrivo — solo info, non notifica push
-      data.snapshots[item.id]={seasons,eps,lastEpId:lastEp?.id||null,nextEp:nextEp||null};
-    }catch(e){/* skip */}
-  }
-
-  // Nuovi ingressi nella Top 10 dei contenuti più visti
+function canShowPush(data,now){
+  data.pushStats=data.pushStats||{day:'',count:0,lastPushAt:0};
+  const today=dayKey(now);
+  if(data.pushStats.day!==today)data.pushStats={day:today,count:0,lastPushAt:0};
+  if(data.pushStats.count>=(CONFIG.notificationDailyLimit||3))return false;
+  if(now-(data.pushStats.lastPushAt||0)<(CONFIG.notificationQuietWindow||8*60*60*1000))return false;
+  data.pushStats.count++;
+  data.pushStats.lastPushAt=now;
+  return true;
+}
+async function showSystemUpdateNotification(created,data,now){
+  if(!created.length||!('Notification' in window)||Notification.permission!=='granted')return;
+  if(!canShowPush(data,now))return;
+  const top=created[0],extra=created.length>1?` + altri ${created.length-1}`:'';
+  const body=created.length===1?top.desc:`${top.title}: ${top.desc}${extra}`;
+  const opts={body,icon:'assets/streamgn-logo.png',badge:'assets/streamgn-logo.png',tag:'streamgn-updates',renotify:false,data:{url:'./?page=profilo',itemId:top.itemId,type:top.type,poster:top.poster||''}};
   try{
-    const top=await tmdb('/trending/all/day',{region:'IT'});
-    const topItems=(top.results||[]).filter(x=>x.media_type==='movie'||x.media_type==='tv').slice(0,10);
-    const topIds=topItems.map(x=>`${x.media_type}_${x.id}`);
-    const prevTop=data.snapshots.top10Ids||[];
-    const today=new Date(now).toISOString().slice(0,10);
-    if(prevTop.length){
-      topItems.forEach((item,idx)=>{
-        const key=`${item.media_type}_${item.id}`;
-        if(prevTop.includes(key))return;
-        const title=item.title||item.name||'Nuovo contenuto';
-        const notif={id:`top10_${key}_${today}`,itemId:item.id,type:item.media_type,title,poster:item.poster_path||'',
-          desc:`🔥 Nuovo in Top 10 #${idx+1}`,ts:now,read:false};
-        if(!data.items.find(n=>n.id===notif.id)){data.items.unshift(notif);newCount++;}
-      });
-    }
-    data.snapshots.top10Ids=topIds;
-  }catch(e){
-    if(!data.snapshots.top10Ids)data.snapshots.top10Ids=[];
+    const reg=await navigator.serviceWorker?.ready;
+    if(reg?.showNotification){await reg.showNotification('StreaMGN',opts);return;}
+  }catch(e){}
+  try{new Notification('StreaMGN',opts);}catch(e){}
+}
+
+async function checkForUpdates(force=false,{push=true}={}){
+  const data=getNotifData(),now=Date.now(),created=[];
+  const interval=CONFIG.notificationInterval||6*60*60*1000;
+  if(!force&&now-(data.lastCheck||0)<interval)return 0;
+  data.snapshots=data.snapshots||{};
+  data.snapshots.upcomingNotified=data.snapshots.upcomingNotified||{};
+  const list=document.getElementById('notif-list');
+  if(list)list.innerHTML='<div class="notif-checking"><div class="spinner"></div><span>Controllo aggiornamenti...</span></div>';
+
+  for(const item of getTrackedContentItems().slice(0,80)){
+    try{
+      if(item.type==='tv'){
+        const info=await tmdb(`/tv/${item.id}`,{}, {maxAge:2*60*60*1000});
+        const snap=data.snapshots[item.id]||{};
+        const seasons=info.number_of_seasons||0,eps=info.number_of_episodes||0,lastEp=info.last_episode_to_air,nextEp=info.next_episode_to_air,poster=info.poster_path||item.poster||'';
+        if(!snap.seasons&&!snap.eps){data.snapshots[item.id]={seasons,eps,lastEpId:lastEp?.id||null,nextEpId:nextEp?.id||null};}
+        else if(seasons>snap.seasons){
+          addNotif(data,created,{id:`s_${item.id}_${seasons}`,itemId:item.id,type:'tv',title:item.title||info.name,poster,category:'list',priority:1,desc:`Nuova stagione disponibile: stagione ${seasons}`});
+        }else if(eps>snap.eps&&lastEp){
+          const epLabel=`S${lastEp.season_number}E${lastEp.episode_number}${lastEp.name?' · '+lastEp.name:''}`;
+          addNotif(data,created,{id:`e_${item.id}_${lastEp.id}`,itemId:item.id,type:'tv',title:item.title||info.name,poster,category:'list',priority:1,desc:`Nuovo episodio disponibile: ${epLabel}`});
+        }
+        const d=daysUntil(nextEp?.air_date,now),upKey=`tv_${item.id}_${nextEp?.id||nextEp?.air_date}`;
+        if(nextEp&&d!==null&&d>=0&&d<=10&&!data.snapshots.upcomingNotified[upKey]){
+          data.snapshots.upcomingNotified[upKey]=now;
+          addNotif(data,created,{id:`up_${upKey}`,itemId:item.id,type:'tv',title:item.title||info.name,poster,category:'upcoming',priority:2,desc:`Prossima uscita tra ${d===0?'oggi':d+' giorni'}: S${nextEp.season_number}E${nextEp.episode_number}`});
+        }
+        data.snapshots[item.id]={seasons,eps,lastEpId:lastEp?.id||null,nextEpId:nextEp?.id||null};
+      }else{
+        const info=await tmdb(`/movie/${item.id}`,{}, {maxAge:6*60*60*1000});
+        const d=daysUntil(info.release_date,now),upKey=`movie_${item.id}_${info.release_date}`;
+        if(d!==null&&d>=0&&d<=21&&!data.snapshots.upcomingNotified[upKey]){
+          data.snapshots.upcomingNotified[upKey]=now;
+          addNotif(data,created,{id:`up_${upKey}`,itemId:item.id,type:'movie',title:item.title||info.title,poster:info.poster_path||item.poster||'',category:'upcoming',priority:2,desc:`Uscita imminente tra ${d===0?'oggi':d+' giorni'}`});
+        }
+      }
+    }catch(e){}
   }
 
-  // Mantieni max 80 notifiche
+  try{
+    const top=await tmdb('/trending/all/day',{region:'IT'},{maxAge:2*60*60*1000});
+    const demand=(top.results||[]).filter(x=>x.media_type==='movie'||x.media_type==='tv').slice(0,8);
+    const ids=demand.map(x=>`${x.media_type}_${x.id}`),prev=data.snapshots.demandIds||[];
+    const fresh=demand.find((item,idx)=>prev.length&&idx<5&&!prev.includes(`${item.media_type}_${item.id}`));
+    if(fresh){
+      const key=`${fresh.media_type}_${fresh.id}_${dayKey(now)}`;
+      addNotif(data,created,{id:`demand_${key}`,itemId:fresh.id,type:fresh.media_type,title:fresh.title||fresh.name,poster:fresh.poster_path||'',category:'demand',priority:3,desc:'Nuova uscita molto richiesta in tendenza'});
+    }
+    data.snapshots.demandIds=ids;
+  }catch(e){}
+
+  created.sort((a,b)=>(a.priority||9)-(b.priority||9));
   data.items=data.items.slice(0,80);
   data.lastCheck=now;
+  if(push)await showSystemUpdateNotification(created,data,now);
   saveNotifData(data);
   updateNotifBadge();
-
-  // Notifica di sistema se permesso
-  if(newCount>0&&'Notification' in window&&Notification.permission==='granted'){
-    try{new Notification('StreaMGN',{body:`${newCount} nuov${newCount===1?'o':'i'} aggiornament${newCount===1?'o':'i'}!`,icon:'assets/streamgn-logo.png'});}catch(e){}
-  }
-
-  return newCount;
+  return created.length;
 }
 
 /* Render pannello */
@@ -1637,16 +1659,18 @@ function renderNotifPanel(){
   if(changed){saveNotifData(data);updateNotifBadge();}
 
   if(!data.items.length){
-    list.innerHTML='<div class="notif-empty">🔔 Nessuna notifica<br><span style="font-size:.72rem;color:var(--tx3)">Ti avviseremo per nuovi episodi, nuove stagioni<br>e nuovi ingressi nella Top 10</span></div>';
+    list.innerHTML='<div class="notif-empty">Nessuna notifica<br><span style="font-size:.72rem;color:var(--tx3)">Ti avviso solo per uscite importanti, novita nelle liste e contenuti molto richiesti.</span></div>';
     return;
   }
 
   list.innerHTML=data.items.map(n=>{
     const img=n.poster?`<img src="${IMG}${n.poster}" class="notif-poster" loading="lazy">`:'<div class="notif-poster-ph">📺</div>';
     const time=new Date(n.ts).toLocaleDateString('it-IT',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+    const label=n.category==='list'?'Dalle tue liste':n.category==='upcoming'?'In arrivo':n.category==='demand'?'Molto richiesto':'Novita';
     return `<div class="notif-item${n.read?'':' unread'}" data-notif-id="${n.itemId}" data-notif-type="${n.type}" data-notif-poster="${n.poster||''}">
       ${img}
       <div class="notif-body">
+        <div class="notif-cat">${label}</div>
         <div class="notif-title">${ea(n.title)}</div>
         <div class="notif-desc">${n.desc}</div>
         <div class="notif-time">${time}</div>
@@ -1661,28 +1685,30 @@ function setupNotifPermRow(){
   const row=document.getElementById('notif-perm-row');
   if(!row)return;
   if(!('Notification' in window)){row.textContent='';return;}
-  if(Notification.permission==='granted'){row.textContent='🔔 Notifiche di sistema attive';}
-  else if(Notification.permission==='denied'){row.textContent='⚠️ Notifiche bloccate — attivale nelle impostazioni del browser';}
-  else{row.textContent='';}
+  if(Notification.permission==='granted'){row.textContent='Push attive: massimo poche notifiche importanti al giorno.';}
+  else if(Notification.permission==='denied'){row.textContent='Notifiche bloccate: attivale dalle impostazioni del browser.';}
+  else{row.textContent='Tocca la campanella per attivare le push importanti.';}
 }
 
-/* Richiede permesso alla prima apertura, una volta sola */
-function askNotifPermissionOnce(){
-  if(!('Notification' in window))return;
-  if(Notification.permission!=='default')return;
-  if(readJSONKey('svx_notif_asked',false))return;
-  writeJSONKey('svx_notif_asked',true);
-  Notification.requestPermission();
+async function askNotifPermissionFromBell(){
+  if(!('Notification' in window)||Notification.permission!=='default')return;
+  try{
+    const p=await Notification.requestPermission();
+    setupNotifPermRow();
+    if(p==='granted')showToast('Push importanti attivate');
+  }catch(e){}
 }
 async function registerNotificationWorker(){
   if(!('serviceWorker' in navigator)||location.protocol==='file:')return;
   try{
     const reg=await navigator.serviceWorker.register('./sw.js');
+    if('sync' in reg)try{await reg.sync.register('streamgn-updates');}catch(e){}
     if('periodicSync' in reg&&navigator.permissions){
       const status=await navigator.permissions.query({name:'periodic-background-sync'});
       if(status.state==='granted')await reg.periodicSync.register('streamgn-updates',{minInterval:CONFIG.notificationInterval||21600000});
     }
-    if(reg.active)reg.active.postMessage({type:'CHECK_UPDATES'});
+    const ready=await navigator.serviceWorker.ready;
+    ready.active?.postMessage({type:'CHECK_UPDATES'});
   }catch(e){}
 }
 
@@ -1693,6 +1719,7 @@ function openNotifPanel(){
   setupNotifPermRow();
   renderNotifPanel();
   document.body.style.overflow='hidden';
+  askNotifPermissionFromBell();
 }
 function closeNotifPanel(){
   const panel=document.getElementById('notif-panel');
@@ -1711,15 +1738,13 @@ document.getElementById('notif-panel').addEventListener('click',e=>{
 document.getElementById('btn-notif-check').addEventListener('click',async()=>{
   const btn=document.getElementById('btn-notif-check');
   btn.textContent='⏳ Controllo…';btn.disabled=true;
-  const cnt=await checkForUpdates(true);
+  const cnt=await checkForUpdates(true,{push:false});
   renderNotifPanel();
   btn.textContent='🔄 Aggiorna';btn.disabled=false;
-  if(cnt>0)showToast(`${cnt} nuov${cnt===1?'o':'i'} aggiornament${cnt===1?'o':'i'}! 🎉`,3000);
+  if(cnt>0)showToast(`${cnt} aggiornament${cnt===1?'o':'i'} importante${cnt===1?'':'i'}`,3000);
   else showToast('Tutto aggiornato ✓');
 });
 
-/* Richiedi permesso notifiche alla prima apertura (una volta sola) */
-askNotifPermissionOnce();
 registerNotificationWorker();
 
 /* Avvio automatico: controlla aggiornamenti dopo 3s dall'apertura */
@@ -1728,3 +1753,6 @@ setTimeout(async()=>{
   await checkForUpdates(false);
   updateNotifBadge();
 },3000);
+setInterval(()=>checkForUpdates(false).then(updateNotifBadge).catch(()=>{}),60*60*1000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkForUpdates(false,{push:false}).then(updateNotifBadge).catch(()=>{});});
+window.addEventListener('online',()=>checkForUpdates(false,{push:false}).then(updateNotifBadge).catch(()=>{}));
