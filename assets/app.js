@@ -234,6 +234,29 @@ function initTheme(){
 }
 initTheme();
 
+/* LIQUID GLASS MOTION */
+function initLiquidGlassMotion(){
+  const root=document.documentElement;
+  const reduce=window.matchMedia?window.matchMedia('(prefers-reduced-motion: reduce)'):null;
+  let lastY=window.scrollY||0,ticking=false;
+  const update=()=>{
+    const y=window.scrollY||0;
+    root.dataset.scroll=y>18?'moved':'top';
+    root.dataset.scrollDir=y>lastY&&y>90?'down':'up';
+    lastY=y;
+    ticking=false;
+  };
+  const updateMotion=()=>{root.dataset.motion=reduce?.matches?'reduced':'full';};
+  window.addEventListener('scroll',()=>{if(!ticking){ticking=true;requestAnimationFrame(update);}}, {passive:true});
+  if(reduce){
+    if(reduce.addEventListener)reduce.addEventListener('change',updateMotion);
+    else if(reduce.addListener)reduce.addListener(updateMotion);
+  }
+  update();
+  updateMotion();
+}
+initLiquidGlassMotion();
+
 /* SEARCH HISTORY */
 function getSH(){return readJSONKey('svx_sh',[]);}
 function addSH(q){try{q=String(q||'').trim();if(q.length<3)return;let h=getSH().filter(x=>x.toLowerCase()!==q.toLowerCase());h.unshift(q);writeJSONKey('svx_sh',h.slice(0,10));}catch(e){}}
