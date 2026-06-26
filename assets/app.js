@@ -28,7 +28,8 @@ const MV_GENRES=[{name:'Tutti',id:null},{name:'Thriller',id:53},{name:'Crime',id
 const TV_GENRES=[{name:'Tutti',id:null},{name:'Crime',id:80},{name:'Dramma',id:18},{name:'Commedia',id:35},{name:'Sci-Fi',id:10765},{name:'Mistero',id:9648},{name:'Reality',id:10764},{name:'Action',id:10759}];
 const DEF_FOLDERS=[{id:'film_watch',name:'FILM che sto guardando',g:'watching',mt:'movie',an:false},{id:'serie_watch',name:'SERIE che sto guardando',g:'watching',mt:'tv',an:false},{id:'film_lista',name:'FILM in lista',g:'lista',mt:'movie',an:false},{id:'serie_lista',name:'SERIE in lista',g:'lista',mt:'tv',an:false},{id:'film_visti',name:'FILM visti',g:'visti',mt:'movie',an:false},{id:'serie_vc',name:'SERIE viste (concluse)',g:'visti',mt:'tv',an:false,sub:'c'},{id:'serie_vo',name:'SERIE viste (in corso)',g:'visti',mt:'tv',an:false,sub:'o'}];
 const GROUPS=[{id:'watching',label:'👁️ Che sto guardando'},{id:'lista',label:'📋 In lista'},{id:'visti',label:'✅ Viste'}];
-const DATA_KEYS=['svx_f','svx_w','svx_prog','svx_r','svx_sh','svx_notif','svx_notif_asked','svx_s','svx_sport_url','svx_src_pref','svx_src_bad','svx_ep_seen','svx_hist','svx_tmdb_cache','svx_anilist_map'];
+const DATA_KEYS=['svx_f','svx_w','svx_prog','svx_r','svx_sh','svx_notif','svx_notif_asked','svx_notif_prompt_v2','svx_s','svx_sport_url','svx_src_pref','svx_src_bad','svx_ep_seen','svx_hist','svx_tmdb_cache','svx_anilist_map'];
+const NOTIF_PROMPT_KEY='svx_notif_prompt_v2';
 const storageMemory={};
 let idbDb=null,idbHydrated=false;
 
@@ -1690,13 +1691,49 @@ function setupNotifPermRow(){
   else{row.textContent='Tocca la campanella per attivare le push importanti.';}
 }
 
-async function askNotifPermissionFromBell(){
+function dismissNotifPermissionPrompt(){
+  const prompt=document.querySelector('.notif-permission-prompt');
+  if(!prompt)return;
+  prompt.classList.add('closing');
+  setTimeout(()=>prompt.remove(),180);
+}
+async function requestNotifPermission(showFeedback=false){
+  if(!('Notification' in window))return'unsupported';
+  if(Notification.permission!=='default'){setupNotifPermRow();return Notification.permission;}
+  let permission='default';
+  try{permission=await Notification.requestPermission();}catch(e){}
+  if(permission!=='default')writeJSONKey(NOTIF_PROMPT_KEY,true);
+  setupNotifPermRow();
+  if(showFeedback&&permission==='granted')showToast('Push importanti attivate');
+  return permission;
+}
+function showNotifPermissionPrompt(force=false){
   if(!('Notification' in window)||Notification.permission!=='default')return;
-  try{
-    const p=await Notification.requestPermission();
+  if(!force&&readJSONKey(NOTIF_PROMPT_KEY,false))return;
+  if(document.querySelector('.notif-permission-prompt'))return;
+  const prompt=document.createElement('div');
+  prompt.className='notif-permission-prompt';
+  prompt.innerHTML=`<div class="notif-permission-card">
+    <div class="notif-permission-kicker">Notifiche</div>
+    <div class="notif-permission-title">Vuoi ricevere notifiche?</div>
+    <div class="notif-permission-sub">Solo poche push importanti: nuove uscite, episodi e novita dai contenuti nelle tue liste.</div>
+    <div class="notif-permission-actions">
+      <button class="notif-permission-deny" type="button">No grazie</button>
+      <button class="notif-permission-allow" type="button">Attiva</button>
+    </div>
+  </div>`;
+  prompt.querySelector('.notif-permission-deny').addEventListener('click',()=>{
+    writeJSONKey(NOTIF_PROMPT_KEY,true);
+    dismissNotifPermissionPrompt();
     setupNotifPermRow();
-    if(p==='granted')showToast('Push importanti attivate');
-  }catch(e){}
+  });
+  prompt.querySelector('.notif-permission-allow').addEventListener('click',async e=>{
+    e.currentTarget.disabled=true;
+    await requestNotifPermission(true);
+    writeJSONKey(NOTIF_PROMPT_KEY,true);
+    dismissNotifPermissionPrompt();
+  });
+  document.body.appendChild(prompt);
 }
 async function registerNotificationWorker(){
   if(!('serviceWorker' in navigator)||location.protocol==='file:')return;
@@ -1719,7 +1756,7 @@ function openNotifPanel(){
   setupNotifPermRow();
   renderNotifPanel();
   document.body.style.overflow='hidden';
-  askNotifPermissionFromBell();
+  showNotifPermissionPrompt(true);
 }
 function closeNotifPanel(){
   const panel=document.getElementById('notif-panel');
@@ -1746,6 +1783,7 @@ document.getElementById('btn-notif-check').addEventListener('click',async()=>{
 });
 
 registerNotificationWorker();
+setTimeout(()=>showNotifPermissionPrompt(),800);
 
 /* Avvio automatico: controlla aggiornamenti dopo 3s dall'apertura */
 setTimeout(async()=>{
