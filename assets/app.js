@@ -167,6 +167,17 @@ hydrateStorageFromIDB();
 
 /* SMOOTH CLOSE */
 function smoothClose(el,dur,cb){el.classList.add('closing');setTimeout(()=>{el.classList.remove('open','closing');if(cb)cb();},dur);}
+function lockBodyScroll(){document.body.style.overflow='hidden';}
+function unlockBodyScrollIfClear(){
+  const modalOpen=document.querySelector('#search-ov.open,#detail-modal.open,#actor-modal.open,#player-modal.open,#folder-picker.open,#confirm-modal.open,#export-sel-modal.open,#import-modal.open');
+  const notifOpen=document.getElementById('notif-panel')?.style.display==='block';
+  if(!modalOpen&&!notifOpen)document.body.style.overflow='';
+}
+function resetPanelScroll(target){
+  const el=typeof target==='string'?document.querySelector(target):target;
+  if(!el)return;
+  try{el.scrollTop=0;}catch(e){}
+}
 
 /* HELPERS */
 const ea=s=>String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -547,8 +558,10 @@ function openExportModal(){
     custom.forEach(folder=>{const cnt=(folder.items||[]).length;const row=document.createElement('label');row.className='exp-chk-row';row.innerHTML=`<input type="checkbox" class="exp-chk" data-fid="${folder.id}" ${cnt>0?'checked':''} ${cnt===0?'disabled':''}><span class="exp-chk-label">${folder.name||folder.id}</span><span class="exp-chk-count">${cnt}</span>`;el.appendChild(row);});
   }
   document.getElementById('export-sel-modal').classList.add('open');
+  resetPanelScroll('#export-sel-modal .exp-sel-box');
+  lockBodyScroll();
 }
-function closeExportModal(){smoothClose(document.getElementById('export-sel-modal'),150);}
+function closeExportModal(){smoothClose(document.getElementById('export-sel-modal'),150,unlockBodyScrollIfClear);}
 function doExport(){
   const sids=Array.from(document.querySelectorAll('.exp-chk:checked')).map(c=>c.dataset.fid);if(!sids.length){showToast('Seleziona almeno una lista');return;}
   const af=getFolders(),ef={};sids.forEach(fid=>{if(af[fid])ef[fid]=af[fid];});
@@ -570,7 +583,7 @@ document.getElementById('exp-sel-none').addEventListener('click',()=>document.qu
 
 /* IMPORT */
 let _importData=null;
-function closeImportModal(){smoothClose(document.getElementById('import-modal'),150,()=>{_importData=null;});}
+function closeImportModal(){smoothClose(document.getElementById('import-modal'),150,()=>{_importData=null;unlockBodyScrollIfClear();});}
 function guessImportTarget(folder){
   if(folder.id&&DEF_FOLDERS.some(d=>d.id===folder.id))return folder.id;
   const g=folder.g||null,mt=folder.mt||null,an=folder.an!=null?!!folder.an:null,sub=folder.sub||null;
@@ -599,6 +612,8 @@ function openImportModal(data){
     listEl.appendChild(row);
   });
   document.getElementById('import-modal').classList.add('open');
+  resetPanelScroll('#import-modal .imp-box');
+  lockBodyScroll();
 }
 function doImport(){
   if(!_importData)return;const rows=document.querySelectorAll('#imp-folder-list .imp-row');const iF=_importData.folders||{},existing=getFolders();let total=0;
@@ -1114,7 +1129,8 @@ async function openDetail(id,type,poster,isAnime){
   const bd=document.getElementById('dm-backdrop'),bdy=document.getElementById('dm-body');
   bd.style.backgroundImage=poster?`url('${IMG_W}${poster}')`:''
   bdy.innerHTML='<div class="spin-wrap"><div class="spinner"></div></div>';
-  document.getElementById('detail-modal').classList.add('open');document.body.style.overflow='hidden';
+  const detailModal=document.getElementById('detail-modal');
+  detailModal.classList.add('open');resetPanelScroll(detailModal);lockBodyScroll();
   try{
     const [info,credits,providers,trailerKey]=await Promise.all([tmdb(`/${type}/${id}`),tmdb(`/${type}/${id}/${type==='tv'?'aggregate_credits':'credits'}`),tmdb(`/${type}/${id}/watch/providers`),getTrailer(id,type,type==='tv'?1:null)]);
     currentDetailTitle=info.title||info.name||'';currentDetailPoster=info.poster_path||poster||'';currentTrailerKey=trailerKey;
@@ -1172,7 +1188,7 @@ async function loadDetailEpisodes(tvId,season,isAnime,last,seasons=[]){
     if(currentEp){setTimeout(()=>{const el=document.getElementById(`ep-${Math.min(currentEp,eps.length)}`);if(el)el.scrollIntoView({behavior:'smooth',block:'nearest'});},120);}
   }catch(e){container.innerHTML='<div class="empty">Errore episodi.</div>';}
 }
-function closeDetail(){hideTrailer();smoothClose(document.getElementById('detail-modal'),180,()=>{document.body.style.overflow='';});}
+function closeDetail(){hideTrailer();smoothClose(document.getElementById('detail-modal'),180,unlockBodyScrollIfClear);}
 document.getElementById('btn-detail-back').addEventListener('click',closeDetail);
 document.getElementById('btn-detail-close').addEventListener('click',closeDetail);
 
@@ -1200,7 +1216,7 @@ function personAge(info){
   return `${age} anni${info.deathday?' al decesso':''}`;
 }
 async function openActor(actorId){
-  const ab=document.getElementById('am-body');ab.innerHTML='<div class="spin-wrap"><div class="spinner"></div></div>';document.getElementById('actor-modal').classList.add('open');
+  const ab=document.getElementById('am-body'),actorModal=document.getElementById('actor-modal');ab.innerHTML='<div class="spin-wrap"><div class="spinner"></div></div>';actorModal.classList.add('open');resetPanelScroll(actorModal);lockBodyScroll();
   try{
     const [info,credits]=await Promise.all([tmdb(`/person/${actorId}`),tmdb(`/person/${actorId}/combined_credits`)]);
     const wiki=await fetchWikiBio(info.name);
@@ -1226,7 +1242,7 @@ async function openActor(actorId){
     if(more)more.addEventListener('click',()=>{const bio=document.getElementById('am-bio'),expanded=bio.classList.toggle('expanded');bio.textContent=expanded?bio.dataset.full:bio.dataset.short;more.textContent=expanded?'Mostra meno':'Mostra di più';});
   }catch(e){ab.innerHTML='<div class="err" style="padding:2.5rem">Errore.</div>';}
 }
-function closeActor(){smoothClose(document.getElementById('actor-modal'),180);}
+function closeActor(){smoothClose(document.getElementById('actor-modal'),180,unlockBodyScrollIfClear);}
 document.getElementById('btn-actor-back').addEventListener('click',closeActor);
 document.getElementById('btn-actor-close').addEventListener('click',closeActor);
 
@@ -1304,12 +1320,12 @@ async function openPlayer(id,type,title,poster,season,episode,isAnime){
   currentIsAnime=resolvedAnime;currentSrc=getPreferredSource(id,type,initialS,initialE,resolvedAnime,resolvedAnime?'streamrip':'vixsrc');currentTvId=String(id);document.getElementById('pm-title').textContent=title;document.getElementById('anime-note').style.display='none';buildSrcToggle(resolvedAnime);autoAddToWatching({id:String(id),type,title,poster:poster||'',isAnime:resolvedAnime});
   playerProgId=String(id);playerProgType=type;playerProgSeason=season||null;playerProgEpisode=episode||null;playerNoteSavedThisSession=true;playerSessionTitle=title;playerSessionPoster=poster||'';playerSessionIsAnime=resolvedAnime;playerSessionAnimeTitles=resolvedAnime?uniqueTextList([title,...(currentDetailId===String(id)?currentDetailAnimeTitles:[])]):[];playerSessionSeasons=[];playerLastAutoSecs=0;playerLastAutoSaveAt=0;stopPlayerAutoSave(false);hideReminderOverlay();document.getElementById('pm-note-bar').classList.remove('highlight');updateDeviceMediaSession(title,type,poster,season,episode);
   const tc=document.getElementById('tv-ctrl'),fr=document.getElementById('vix-frame');
-  if(type==='tv'){tc.style.display='flex';const sSel=document.getElementById('s-sel'),eSel=document.getElementById('e-sel');sSel.innerHTML='<option>Caricamento…</option>';eSel.innerHTML='<option>Caricamento…</option>';document.getElementById('player-modal').classList.add('open');document.body.style.overflow='hidden';const lastS=initialS,lastE=initialE;try{const show=await tmdb(`/tv/${id}`);if(resolvedAnime)playerSessionAnimeTitles=uniqueTextList([...playerSessionAnimeTitles,...animeTitleCandidates(show,title)]);const seasons=(show.seasons||[]).filter(s=>s.season_number>0);if(!seasons.length)seasons.push({season_number:1,episode_count:10,name:'Stagione 1'});playerSessionSeasons=seasons;sSel.innerHTML=seasons.map(s=>`<option value="${s.season_number}">S${s.season_number} · ${s.name||'Stagione '+s.season_number} (${s.episode_count||'?'} ep.)</option>`).join('');sSel.value=String(lastS);await loadEpisodesForPlayer(id,sSel.value,lastE);}catch(e){sSel.innerHTML='<option value="1">Stagione 1</option>';eSel.innerHTML='<option value="1">Episodio 1</option>';}const s=sSel.value||1,ep=document.getElementById('e-sel').value||1;playerProgSeason=Number(s);playerProgEpisode=Number(ep);currentSrc=getPreferredSource(id,type,s,ep,resolvedAnime,currentSrc);buildSrcToggle(resolvedAnime);refreshNoteBar(id,type,s,ep);const prog=getProgress(id,type,s,ep);applySavedPlayerSandbox();setPlayerFrameSrc(id,type,s,ep,currentSrc,prog?prog.secs:0);startPlayerAutoSave(prog?prog.secs:0);saveWatching(id,type,title,poster,s,ep);updateNextEpisodeButton();updateSourceState();}
-  else{tc.style.display='none';playerProgSeason=null;playerProgEpisode=null;refreshNoteBar(id,type,null,null);const prog=getProgress(id,type,null,null);applySavedPlayerSandbox();setPlayerFrameSrc(id,type,null,null,currentSrc,prog?prog.secs:0);startPlayerAutoSave(prog?prog.secs:0);document.getElementById('player-modal').classList.add('open');document.body.style.overflow='hidden';saveWatching(id,type,title,poster,null,null);updateNextEpisodeButton();updateSourceState();}
+  if(type==='tv'){tc.style.display='flex';const sSel=document.getElementById('s-sel'),eSel=document.getElementById('e-sel');sSel.innerHTML='<option>Caricamento…</option>';eSel.innerHTML='<option>Caricamento…</option>';const playerModal=document.getElementById('player-modal');playerModal.classList.add('open');resetPanelScroll(playerModal);lockBodyScroll();const lastS=initialS,lastE=initialE;try{const show=await tmdb(`/tv/${id}`);if(resolvedAnime)playerSessionAnimeTitles=uniqueTextList([...playerSessionAnimeTitles,...animeTitleCandidates(show,title)]);const seasons=(show.seasons||[]).filter(s=>s.season_number>0);if(!seasons.length)seasons.push({season_number:1,episode_count:10,name:'Stagione 1'});playerSessionSeasons=seasons;sSel.innerHTML=seasons.map(s=>`<option value="${s.season_number}">S${s.season_number} · ${s.name||'Stagione '+s.season_number} (${s.episode_count||'?'} ep.)</option>`).join('');sSel.value=String(lastS);await loadEpisodesForPlayer(id,sSel.value,lastE);}catch(e){sSel.innerHTML='<option value="1">Stagione 1</option>';eSel.innerHTML='<option value="1">Episodio 1</option>';}const s=sSel.value||1,ep=document.getElementById('e-sel').value||1;playerProgSeason=Number(s);playerProgEpisode=Number(ep);currentSrc=getPreferredSource(id,type,s,ep,resolvedAnime,currentSrc);buildSrcToggle(resolvedAnime);refreshNoteBar(id,type,s,ep);const prog=getProgress(id,type,s,ep);applySavedPlayerSandbox();setPlayerFrameSrc(id,type,s,ep,currentSrc,prog?prog.secs:0);startPlayerAutoSave(prog?prog.secs:0);saveWatching(id,type,title,poster,s,ep);updateNextEpisodeButton();updateSourceState();}
+  else{tc.style.display='none';playerProgSeason=null;playerProgEpisode=null;refreshNoteBar(id,type,null,null);const prog=getProgress(id,type,null,null);applySavedPlayerSandbox();setPlayerFrameSrc(id,type,null,null,currentSrc,prog?prog.secs:0);startPlayerAutoSave(prog?prog.secs:0);const playerModal=document.getElementById('player-modal');playerModal.classList.add('open');resetPanelScroll(playerModal);lockBodyScroll();saveWatching(id,type,title,poster,null,null);updateNextEpisodeButton();updateSourceState();}
   refreshCW();
 }
 async function loadEpisodesForPlayer(showId,season,preselect){const eSel=document.getElementById('e-sel');eSel.innerHTML='<option>Caricamento…</option>';try{const data=await tmdb(`/tv/${showId}/season/${season}`);const eps=data.episodes||[];if(!eps.length)throw Error('empty');eSel.innerHTML=eps.map(e=>`<option value="${e.episode_number}">Ep. ${e.episode_number}${e.name?' · '+e.name:''}</option>`).join('');if(preselect)eSel.value=String(preselect);}catch(e){eSel.innerHTML='<option value="1">Episodio 1</option>';}}
-function doClosePlayer(){pipActive=false;clearTimeout(epChangeTimer);clearTimeout(playerSourceHealthTimer);stopPlayerAutoSave(true);hideReminderOverlay();const fr=document.getElementById('vix-frame');smoothClose(document.getElementById('player-modal'),180,()=>{fr.src='';fr.removeAttribute('srcdoc');fr.style.display='block';stopNativeVideo(true);document.body.style.overflow='';document.getElementById('anime-note').style.display='none';currentTvId=null;playerProgId=null;playerSessionTitle='';playerSessionPoster='';playerSessionIsAnime=false;playerSessionAnimeTitles=[];playerSessionSeasons=[];refreshCW();});}
+function doClosePlayer(){pipActive=false;clearTimeout(epChangeTimer);clearTimeout(playerSourceHealthTimer);stopPlayerAutoSave(true);hideReminderOverlay();const fr=document.getElementById('vix-frame');smoothClose(document.getElementById('player-modal'),180,()=>{fr.src='';fr.removeAttribute('srcdoc');fr.style.display='block';stopNativeVideo(true);unlockBodyScrollIfClear();document.getElementById('anime-note').style.display='none';currentTvId=null;playerProgId=null;playerSessionTitle='';playerSessionPoster='';playerSessionIsAnime=false;playerSessionAnimeTitles=[];playerSessionSeasons=[];refreshCW();});}
 function attemptClosePlayer(){hideReminderOverlay();doClosePlayer();}
 function closePlayer(){attemptClosePlayer();}
 document.getElementById('btn-player-back').addEventListener('click',attemptClosePlayer);
@@ -1397,8 +1413,8 @@ window.addEventListener('pagehide',()=>persistEstimatedProgress());
 window.addEventListener('beforeunload',()=>persistEstimatedProgress());
 
 /* FOLDER PICKER */
-function openFolderPicker(item){fpCurrentItem=item;fpPendingCat=null;renderFPStep1();document.getElementById('folder-picker').classList.add('open');}
-function closeFolderPicker(){smoothClose(document.getElementById('folder-picker'),280,()=>{fpCurrentItem=null;fpPendingCat=null;});}
+function openFolderPicker(item){fpCurrentItem=item;fpPendingCat=null;renderFPStep1();document.getElementById('folder-picker').classList.add('open');resetPanelScroll('#folder-picker .fp-sheet');lockBodyScroll();}
+function closeFolderPicker(){smoothClose(document.getElementById('folder-picker'),280,()=>{fpCurrentItem=null;fpPendingCat=null;unlockBodyScrollIfClear();});}
 function renderFPStep1(){
   if(!fpCurrentItem)return;
   const current=getFoldersContaining(fpCurrentItem.id),custom=getCustomFolders();
@@ -1462,8 +1478,8 @@ function renderListePage(){
 }
 
 /* CONFIRM */
-function openConfirm(msg,cb){confirmCallback=cb;document.getElementById('confirm-msg').innerHTML=msg;document.getElementById('confirm-modal').classList.add('open');}
-function closeConfirm(){smoothClose(document.getElementById('confirm-modal'),150,()=>{confirmCallback=null;});}
+function openConfirm(msg,cb){confirmCallback=cb;document.getElementById('confirm-msg').innerHTML=msg;document.getElementById('confirm-modal').classList.add('open');resetPanelScroll('#confirm-modal .confirm-box');lockBodyScroll();}
+function closeConfirm(){smoothClose(document.getElementById('confirm-modal'),150,()=>{confirmCallback=null;unlockBodyScrollIfClear();});}
 document.getElementById('confirm-cancel').addEventListener('click',closeConfirm);
 document.getElementById('confirm-ok').addEventListener('click',()=>{if(confirmCallback)confirmCallback();closeConfirm();});
 document.getElementById('liste-filter-bar').addEventListener('click',e=>{const btn=e.target.closest('[data-list-filter]');if(!btn)return;listeFilter=btn.dataset.listFilter;document.querySelectorAll('.list-filter-btn').forEach(b=>b.classList.toggle('active',b===btn));renderListePage();});
@@ -1513,8 +1529,8 @@ async function runSearch(q){
   peopleBox.innerHTML=persons.length?`<div class="search-sec-hdr">Persone</div><div class="pscard-row">${persons.map(psCardHTML).join('')}</div>`:'';
   grid.innerHTML=contents.length?`${persons.length?'<div class="search-sec-hdr">Film e Serie</div>':''}${contents.map(x=>cardHTML(x)).join('')}`:'';
 }
-function openSearch(){initSearchFilters();document.getElementById('search-ov').classList.add('open');document.body.style.overflow='hidden';renderSearchRecent();document.getElementById('search-content-grid').innerHTML='';document.getElementById('search-persons').innerHTML='';setTimeout(()=>document.getElementById('search-input').focus(),60);}
-function closeSearch(){const ov=document.getElementById('search-ov');ov.classList.add('closing');setTimeout(()=>{ov.classList.remove('open','closing');clearTimeout(searchTimer);document.getElementById('search-input').value='';document.getElementById('search-persons').innerHTML='';document.getElementById('search-content-grid').innerHTML='';document.getElementById('search-recent').innerHTML='';resetSearchFilters();document.body.style.overflow='';searchAddToFolderId=null;searchAddFolderName='';document.getElementById('search-add-banner').style.display='none';},150);}
+function openSearch(){initSearchFilters();document.getElementById('search-ov').classList.add('open');resetPanelScroll('#search-ov');lockBodyScroll();renderSearchRecent();document.getElementById('search-content-grid').innerHTML='';document.getElementById('search-persons').innerHTML='';setTimeout(()=>document.getElementById('search-input').focus(),60);}
+function closeSearch(){const ov=document.getElementById('search-ov');ov.classList.add('closing');setTimeout(()=>{ov.classList.remove('open','closing');clearTimeout(searchTimer);document.getElementById('search-input').value='';document.getElementById('search-persons').innerHTML='';document.getElementById('search-content-grid').innerHTML='';document.getElementById('search-recent').innerHTML='';resetSearchFilters();unlockBodyScrollIfClear();searchAddToFolderId=null;searchAddFolderName='';document.getElementById('search-add-banner').style.display='none';},150);}
 function showSearchAddBanner(name){const b=document.getElementById('search-add-banner');document.getElementById('search-add-fname').textContent=name;b.style.display='flex';}
 document.getElementById('search-add-cancel').addEventListener('click',()=>{searchAddToFolderId=null;searchAddFolderName='';document.getElementById('search-add-banner').style.display='none';});
 document.getElementById('btn-search').addEventListener('click',()=>{searchAddToFolderId=null;document.getElementById('search-add-banner').style.display='none';openSearch();});
@@ -1889,15 +1905,16 @@ async function registerNotificationWorker(){
 function openNotifPanel(){
   const panel=document.getElementById('notif-panel');
   panel.style.display='block';
+  resetPanelScroll('#notif-list');
   setupNotifPermRow();
   renderNotifPanel();
-  document.body.style.overflow='hidden';
+  lockBodyScroll();
   showNotifPermissionPrompt(true);
 }
 function closeNotifPanel(){
   const panel=document.getElementById('notif-panel');
   panel.style.display='none';
-  document.body.style.overflow='';
+  unlockBodyScrollIfClear();
 }
 
 /* Event listeners */
