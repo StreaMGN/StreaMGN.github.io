@@ -1752,3 +1752,132 @@ html[data-theme="light"] .dm-overview,html[data-theme="light"] .am-bio,html[data
     filter:none!important;
   }
 }
+
+/* MOBILE SAFE AREA AND FIT LOCK */
+:root{
+  --safe-top:env(safe-area-inset-top,0px);
+  --safe-right:env(safe-area-inset-right,0px);
+  --safe-bottom:env(safe-area-inset-bottom,0px);
+  --safe-left:env(safe-area-inset-left,0px);
+  --mobile-page-x:clamp(14px,4vw,24px);
+}
+html{
+  width:100%;
+  max-width:100%;
+  overflow-x:hidden;
+  -webkit-text-size-adjust:100%;
+  text-size-adjust:100%;
+}
+body{
+  min-width:0;
+  width:100%;
+  max-width:100%;
+  overflow-x:clip!important;
+  overscroll-behavior-x:none;
+}
+@supports not (overflow:clip){
+  body{overflow-x:hidden!important}
+}
+main,.page,.sections-wrap,.section,.pg-header,.filter-bar,.profile-wrap,.calendar-wrap,.liste-create-row,.liste-filter-bar,.imported-folder-wrap,.search-header,.search-body,.dm-body,.am-body,.pm-wrap,.player-box,.fp-sheet,.imp-box,.exp-sel-box,.confirm-box{
+  min-width:0;
+  max-width:100%;
+}
+img,video,iframe,canvas,svg{
+  max-width:100%;
+}
+.row,.cast-row,.pscard-row,.filter-bar,.liste-filter-bar,.search-filters,.mood-row,.nav-scroll,.pm-actions-row,.src-toggle,.imp-dest-toggle{
+  max-width:100%;
+  overscroll-behavior-x:contain;
+}
+@media(max-width:820px),(pointer:coarse) and (max-width:1024px){
+  :root{--mobile-nav-h:calc(76px + var(--safe-bottom))}
+  html,body{
+    width:100%;
+    max-width:100%;
+    overflow-x:hidden!important;
+  }
+  body{
+    position:relative;
+    padding-top:0!important;
+  }
+  main{
+    width:100%;
+    max-width:100%;
+    overflow-x:clip;
+    padding-top:calc(var(--safe-top) + 6px)!important;
+    padding-bottom:calc(var(--mobile-nav-h) + 18px)!important;
+  }
+  .page{
+    width:100%;
+    max-width:100%;
+    overflow-x:clip;
+  }
+  nav{
+    width:100%!important;
+    max-width:100%!important;
+    overflow:hidden!important;
+    padding-left:calc(8px + var(--safe-left))!important;
+    padding-right:calc(8px + var(--safe-right))!important;
+    padding-bottom:calc(var(--safe-bottom) + 8px)!important;
+  }
+  .nav-scroll{
+    padding-left:2px!important;
+    padding-right:2px!important;
+  }
+  .sections-wrap,.pg-header,.filter-bar,.liste-group-hdr,.liste-create-row,.liste-filter-bar,.imported-folder-wrap{
+    padding-left:calc(var(--mobile-page-x) + var(--safe-left))!important;
+    padding-right:calc(var(--mobile-page-x) + var(--safe-right))!important;
+  }
+  .calendar-wrap,.profile-wrap{
+    padding-left:calc(var(--mobile-page-x) + var(--safe-left))!important;
+    padding-right:calc(var(--mobile-page-x) + var(--safe-right))!important;
+  }
+  .search-header,.search-body,.dm-topbar,.am-topbar,.pm-topbar,.pm-wrap,.player-tools{
+    padding-left:calc(14px + var(--safe-left))!important;
+    padding-right:calc(14px + var(--safe-right))!important;
+  }
+  .row{
+    margin-right:0!important;
+    padding-right:calc(var(--mobile-page-x) + var(--safe-right))!important;
+    padding-left:0!important;
+  }
+  .card,.plus-card,.cw-card,.folder-card,.calendar-item,.premium-stat{
+    min-width:0;
+  }
+  #page-sport,#page-anime{
+    padding-top:var(--safe-top)!important;
+    padding-bottom:0!important;
+    height:calc(100svh - var(--mobile-nav-h) - var(--safe-top))!important;
+    height:calc(100dvh - var(--mobile-nav-h) - var(--safe-top))!important;
+    margin-top:calc(0px - var(--safe-top) - 6px)!important;
+    margin-bottom:0!important;
+    overflow:hidden!important;
+  }
+  #page-sport.active,#page-anime.active{
+    display:flex!important;
+    height:calc(100svh - var(--mobile-nav-h) - var(--safe-top))!important;
+    height:calc(100dvh - var(--mobile-nav-h) - var(--safe-top))!important;
+  }
+  .sp-iframe-bar{
+    width:100%;
+    max-width:100%;
+    min-height:50px;
+    height:auto;
+    padding-left:calc(10px + var(--safe-left))!important;
+    padding-right:calc(10px + var(--safe-right))!important;
+    overflow-x:auto;
+    overscroll-behavior-x:contain;
+  }
+  #sport-iframe-wrap,#anime-iframe-wrap,#sport-iframe,#anime-iframe{
+    width:100%;
+    max-width:100%;
+    min-width:0;
+  }
+  #sport-iframe-wrap,#anime-iframe-wrap{
+    min-height:0;
+    overflow:hidden;
+  }
+  input,select,textarea{
+    font-size:16px!important;
+  }
+}
