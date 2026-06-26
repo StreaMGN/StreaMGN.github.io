@@ -1881,3 +1881,97 @@ img,video,iframe,canvas,svg{
     font-size:16px!important;
   }
 }
+
+/* DYNAMIC READABILITY CONTRAST */
+:root{
+  --ink-on-dark:#fff;
+  --ink-on-dark-2:rgba(255,255,255,.78);
+  --ink-on-dark-3:rgba(255,255,255,.56);
+  --ink-on-light:#050505;
+  --ink-on-light-2:rgba(0,0,0,.7);
+  --ink-on-light-3:rgba(0,0,0,.5);
+}
+html[data-theme="dark"]{
+  --readable-ink:var(--ink-on-dark);
+  --readable-ink-2:var(--ink-on-dark-2);
+  --readable-ink-3:var(--ink-on-dark-3);
+}
+html[data-theme="light"]{
+  --readable-ink:var(--ink-on-light);
+  --readable-ink-2:var(--ink-on-light-2);
+  --readable-ink-3:var(--ink-on-light-3);
+}
+body,main,.page,.section-name,.pg-title,.dm-title,.dm-section-title,.exp-sel-title,.imp-title,.fp-title-text,.calendar-title,.folder-card-name,.profile-pill b,.premium-stat b,.notif-title,.search-rec-item span,.pscard-name,.actor-name,.cw-title,.ep-num-title,.coll-name,.imp-row-name,.exp-chk-label{
+  color:var(--readable-ink);
+}
+.search-sec-hdr,.search-rec-hdr,.gtag,.dm-type-tag,.dm-plat-label,.dm-rating-label,.ctrl-label,.ctrl-hint,.fp-cur-label,.exp-sel-group-lbl,.calendar-date,.notif-cat,.notif-time,.profile-muted,.offline-status{
+  color:var(--readable-ink-3)!important;
+}
+.cw-sub,.pscard-known,.dm-tagline,.dm-meta-item,.genre-pill,.plat-badge,.ep-air,.ep-overview,.coll-count,.confirm-msg,.exp-sel-sub,.imp-sub,.fp-subtitle,.fp-cat-sub,.fp-cur-tag,.calendar-sub,.calendar-empty,.calendar-empty-sub,.notif-desc,.notif-empty,.notif-checking,.notif-permission-sub,.onboarding-sub,.profile-pill,.premium-stat span{
+  color:var(--readable-ink-2)!important;
+}
+.dm-meta-item b,.confirm-msg b,.imp-auto-match b,.calendar-empty-title,.notif-permission-title,.onboarding-title{
+  color:var(--readable-ink)!important;
+}
+.hero,.hero *,.card,.card *,.card-ov,.card-ov *,.dm-hero-wrap,.dm-hero-wrap *,#player-modal,#player-modal *,.player-box,.player-box *,.cw-thumb,.cw-thumb *,.ep-still,.ep-still *,.no-poster,.dm-no-poster,.actor-no-photo,.iframe-fallback,.iframe-fallback *,.profile-hero,.profile-hero *,.am-hero,.am-hero *,.calendar-poster,.calendar-poster *,.notif-poster-ph{
+  --readable-ink:var(--ink-on-dark);
+  --readable-ink-2:var(--ink-on-dark-2);
+  --readable-ink-3:var(--ink-on-dark-3);
+}
+.hero :is(.hero-title,.gbtn,.gbtn-white),.card-ov-title,.profile-hero :is(h1,.gbtn,.gbtn-white),.am-hero :is(.am-title,.gbtn,.gbtn-white),#player-modal :is(.pm-title,.pm-close-btn,.src-btn,.pip-btn,.gbtn),.iframe-fallback :is(.iframe-fallback-title,.sp-iframe-btn),.ep-watched-badge,.card-progress-badge,.cw-prog-badge,.credit-role,.reason-badge{
+  color:var(--ink-on-dark)!important;
+}
+.hero :is(.hero-tag,.hero-meta,.hero-desc),.profile-hero :is(p,.profile-kicker),.am-hero :is(.dm-type-tag,.am-bio,.am-meta-row span),.iframe-fallback :is(.iframe-fallback-kicker,.iframe-fallback-sub),#player-modal :is(.anime-note,.player-source-state,.ctrl-label,.ctrl-hint){
+  color:var(--ink-on-dark-2)!important;
+}
+.hero .gbtn-white,.profile-hero .gbtn-white,.am-hero .gbtn-white,.iframe-fallback-primary,.gbtn-white,.pm-note-save-btn,.pm-reminder-save,.notif-permission-allow,.onboarding-choice.primary{
+  color:var(--ink-on-light)!important;
+}
+html[data-theme="light"] #detail-modal .dm-info-col :is(.dm-overview,.dm-meta-item,.genre-pill,.plat-badge,.ep-overview,.ep-air,.dm-tagline,.dm-type-tag,.dm-plat-label,.dm-rating-label,.binge-pill,.dm-prog-note,.dm-resume-pill){
+  color:var(--ink-on-light-2)!important;
+}
+html[data-theme="light"] #detail-modal .dm-info-col :is(.dm-title,.dm-section-title,.ep-num-title,.coll-name,.dm-meta-item b){
+  color:var(--ink-on-light)!important;
+}
+html[data-theme="dark"] #detail-modal .dm-info-col :is(.dm-overview,.dm-meta-item,.genre-pill,.plat-badge,.ep-overview,.ep-air,.dm-tagline,.dm-type-tag,.dm-plat-label,.dm-rating-label,.binge-pill,.dm-prog-note,.dm-resume-pill){
+  color:var(--ink-on-dark-2)!important;
+}
+html[data-theme="dark"] #detail-modal .dm-info-col :is(.dm-title,.dm-section-title,.ep-num-title,.coll-name,.dm-meta-item b){
+  color:var(--ink-on-dark)!important;
+}
+html[data-theme="light"] :is(.gbtn,.icon-btn,.theme-select,.fchip,.list-filter-btn,.mood-chip,.sp-iframe-btn,.pip-btn,.src-toggle,.tv-controls,.player-tools,.pm-note-bar,.folder-card,.folder-card-body,.premium-stat,.profile-pill,.search-bar,.toast,.fp-sheet,.exp-sel-box,.imp-box,.confirm-box,.calendar-item,.calendar-empty,.onboarding-card,.notif-permission-card,.notif-item,.search-rec-item,.ep-item,.coll-card,.plat-badge,.genre-pill,.fp-cat-btn,.fp-custom-btn,.fp-cur-tag,.imp-row,.exp-chk-row){
+  color:var(--ink-on-light);
+}
+html[data-theme="dark"] :is(.gbtn,.icon-btn,.theme-select,.fchip,.list-filter-btn,.mood-chip,.sp-iframe-btn,.pip-btn,.src-toggle,.tv-controls,.player-tools,.pm-note-bar,.folder-card,.folder-card-body,.premium-stat,.profile-pill,.search-bar,.toast,.fp-sheet,.exp-sel-box,.imp-box,.confirm-box,.calendar-item,.calendar-empty,.onboarding-card,.notif-permission-card,.notif-item,.search-rec-item,.ep-item,.coll-card,.plat-badge,.genre-pill,.fp-cat-btn,.fp-custom-btn,.fp-cur-tag,.imp-row,.exp-chk-row){
+  color:var(--ink-on-dark);
+}
+html[data-theme="light"] :is(.fchip.active,.list-filter-btn.active,.imp-dest-btn.active,.src-btn.active,.exp-ok-btn,.imp-ok-btn){
+  color:#fff!important;
+}
+html[data-theme="dark"] :is(.fchip.active,.list-filter-btn.active,.imp-dest-btn.active,.src-btn.active,.exp-ok-btn,.imp-ok-btn){
+  color:#050505!important;
+}
+html[data-theme="light"] .nav-btn{
+  color:var(--ink-on-light-2)!important;
+}
+html[data-theme="light"] .nav-btn:hover,html[data-theme="light"] .nav-btn.active{
+  color:var(--ink-on-light)!important;
+}
+html[data-theme="dark"] .nav-btn{
+  color:var(--ink-on-dark-3)!important;
+}
+html[data-theme="dark"] .nav-btn:hover,html[data-theme="dark"] .nav-btn.active{
+  color:var(--ink-on-dark)!important;
+}
+html[data-theme="light"] :is(.search-bar input,.search-filter-input,.gsel,.pm-note-inp,.pm-reminder-inp,.imp-new-name,.sp-admin-input){
+  color:var(--ink-on-light)!important;
+}
+html[data-theme="dark"] :is(.search-bar input,.search-filter-input,.gsel,.pm-note-inp,.pm-reminder-inp,.imp-new-name,.sp-admin-input){
+  color:var(--ink-on-dark)!important;
+}
+html[data-theme="light"] :is(.search-bar input,.search-filter-input,.pm-note-inp,.pm-reminder-inp,.imp-new-name,.sp-admin-input)::placeholder{
+  color:var(--ink-on-light-3)!important;
+}
+html[data-theme="dark"] :is(.search-bar input,.search-filter-input,.pm-note-inp,.pm-reminder-inp,.imp-new-name,.sp-admin-input)::placeholder{
+  color:var(--ink-on-dark-3)!important;
+}
