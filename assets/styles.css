@@ -1339,3 +1339,80 @@ html[data-theme="light"] .gbtn,html[data-theme="light"] .icon-btn,html[data-them
   .nav-btn:hover{background:transparent!important}
   .nav-btn.active{background:rgba(255,255,255,.18)!important}
 }
+
+/* MOBILE NAV OVERRIDE */
+@media(max-width:820px),(pointer:coarse) and (max-width:1024px){
+  :root{--mobile-nav-h:calc(76px + env(safe-area-inset-bottom,0px))}
+  body{padding-top:0!important}
+  main{padding-bottom:calc(var(--mobile-nav-h) + 18px)!important}
+  nav{
+    position:fixed!important;
+    top:auto!important;
+    bottom:0!important;
+    left:0!important;
+    right:0!important;
+    z-index:1200!important;
+    min-height:var(--mobile-nav-h)!important;
+    height:auto!important;
+    align-items:center!important;
+    gap:6px!important;
+    padding:8px 10px calc(env(safe-area-inset-bottom,0px) + 8px)!important;
+    border-top:.5px solid var(--lg-border-soft)!important;
+    border-bottom:0!important;
+    transform:none!important;
+  }
+  nav #nav-logo{display:none!important}
+  nav .nav-scroll,nav .nav-right{
+    margin:0!important;
+    background:transparent!important;
+    border-color:transparent!important;
+    box-shadow:none!important;
+  }
+  .nav-scroll{
+    flex:1 1 auto!important;
+    min-width:0!important;
+    gap:3px!important;
+    padding:2px!important;
+    overflow-x:auto!important;
+    scroll-snap-type:x proximity!important;
+  }
+  .nav-btn{
+    flex:0 0 auto!important;
+    min-width:58px!important;
+    min-height:42px!important;
+    padding:8px 10px!important;
+    border-radius:999px!important;
+    font-size:.64rem!important;
+    line-height:1!important;
+    font-weight:850!important;
+    scroll-snap-align:center!important;
+  }
+  .nav-btn.active{
+    background:linear-gradient(135deg,rgba(255,255,255,.24),rgba(255,255,255,.1) 52%,rgba(255,255,255,.18))!important;
+    color:var(--tx)!important;
+  }
+  .nav-right{
+    flex:0 0 auto!important;
+    gap:4px!important;
+    padding:0!important;
+  }
+  .nav-right .icon-btn{
+    width:42px!important;
+    height:42px!important;
+    flex:0 0 42px!important;
+  }
+  .theme-select{display:none!important}
+  #scroll-top{
+    bottom:calc(var(--mobile-nav-h) + 14px)!important;
+    right:14px!important;
+  }
+  #page-sport,#page-anime{
+    height:calc(100svh - var(--mobile-nav-h))!important;
+    height:calc(100dvh - var(--mobile-nav-h))!important;
+    margin-bottom:0!important;
+  }
+  #page-sport.active,#page-anime.active{
+    height:calc(100svh - var(--mobile-nav-h))!important;
+    height:calc(100dvh - var(--mobile-nav-h))!important;
+  }
+}
