@@ -11,3 +11,14 @@ ANIME_PROVIDERS = "streamrip"
 SPORT_PROVIDERS = "configured"
 STREAMRIP_BASE_URL = "https://streamrip-website-production.up.railway.app"
 ANILIST_API_BASE = "https://graphql.anilist.co"
+VAPID_SUBJECT = "mailto:admin@streamgn.github.io"
+VAPID_PUBLIC_KEY = ""
+VAPID_PRIVATE_JWK = ""
+PUSH_ADMIN_TOKEN = ""
+
+[[kv_namespaces]]
+binding = "PUSH_SUBSCRIPTIONS"
+id = "replace-with-kv-namespace-id"
+
+[triggers]
+crons = ["0 10,18 * * *"]

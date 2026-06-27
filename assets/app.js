@@ -23,8 +23,12 @@ const SOURCES_ANIME=sourceListFromConfig('anime',['anime']);
 const SPORT_DEFAULT_URL=CONFIG.sportDefaultUrl||'https://pepperstream.xyz/index.php';
 const ANIME_UNITY_URL=CONFIG.animeUnityUrl||'https://www.animeunity.so';
 const REMOTE_CONFIG_URL=CONFIG.remoteConfigUrl||'assets/remote-config.json';
+const EXTERNAL_SITES_URL=CONFIG.externalSitesUrl||'assets/external-sites.json';
 const SPORT_ADMIN_EDIT_URL=CONFIG.sportAdminEditUrl||'https://github.com/StreaMGN/StreaMGN.github.io/edit/main/assets/remote-config.json';
-const FRAME_BLOCKED_HOSTS=['animeunity.so','www.animeunity.so','pepperstream.xyz','www.pepperstream.xyz'];
+const EXTERNAL_SITES_ADMIN_EDIT_URL=CONFIG.externalSitesAdminEditUrl||'https://github.com/StreaMGN/StreaMGN.github.io/edit/main/assets/external-sites.json';
+const PUSH_PUBLIC_KEY=CONFIG.pushPublicKey||CONFIG.push?.publicKey||'';
+const PUSH_SUBSCRIBE_URL=CONFIG.pushSubscribeUrl||CONFIG.push?.subscribeUrl||'';
+const PUSH_UNSUBSCRIBE_URL=CONFIG.pushUnsubscribeUrl||CONFIG.push?.unsubscribeUrl||'';
 const PROVIDERS=[{name:'Netflix',id:8,c:'#e50914'},{name:'Prime Video',id:9,c:'#00a8e1'},{name:'Disney+',id:337,c:'#1133cc'},{name:'Apple TV+',id:350,c:'#aaa'},{name:'Paramount+',id:531,c:'#0055ff'},{name:'NOW',id:39,c:'#00b4b4'}];
 const MV_GENRES=[{name:'Tutti',id:null},{name:'Thriller',id:53},{name:'Crime',id:80},{name:'Romantico',id:10749},{name:'Azione',id:28},{name:'Horror',id:27},{name:'Sci-Fi',id:878},{name:'Commedia',id:35},{name:'Dramma',id:18},{name:'Avventura',id:12}];
 const TV_GENRES=[{name:'Tutti',id:null},{name:'Crime',id:80},{name:'Dramma',id:18},{name:'Commedia',id:35},{name:'Sci-Fi',id:10765},{name:'Mistero',id:9648},{name:'Reality',id:10764},{name:'Action',id:10759}];
@@ -179,6 +183,34 @@ function resetPanelScroll(target){
   const el=typeof target==='string'?document.querySelector(target):target;
   if(!el)return;
   try{el.scrollTop=0;}catch(e){}
+}
+function hardCloseLayer(selector){
+  const el=document.querySelector(selector);
+  if(!el)return;
+  el.classList.remove('open','closing');
+}
+function closeTransientLayers(){
+  ['#search-ov','#folder-picker','#confirm-modal','#export-sel-modal','#import-modal'].forEach(hardCloseLayer);
+  const notif=document.getElementById('notif-panel');
+  if(notif)notif.style.display='none';
+  hideTrailer();
+  clearTimeout(searchTimer);
+  searchAddToFolderId=null;
+  searchAddFolderName='';
+  fpCurrentItem=null;
+  fpPendingCat=null;
+  confirmCallback=null;
+  _importData=null;
+  const banner=document.getElementById('search-add-banner');
+  if(banner)banner.style.display='none';
+  unlockBodyScrollIfClear();
+}
+function closeContentLayers(){
+  closeTransientLayers();
+  hardCloseLayer('#detail-modal');
+  hardCloseLayer('#actor-modal');
+  if(document.getElementById('player-modal')?.classList.contains('open'))closePlayer();
+  unlockBodyScrollIfClear();
 }
 
 /* HELPERS */
@@ -583,6 +615,26 @@ function readAppData(){return{folders:readJSONKey('svx_f',{}),watching:readJSONK
 function writeAppData(data){if(!data)return;writeJSONKey('svx_f',data.folders||{});writeJSONKey('svx_w',data.watching||{});writeJSONKey('svx_prog',data.progress||{});writeJSONKey('svx_r',data.ratings||{});writeJSONKey('svx_sh',data.searchHistory||[]);writeJSONKey('svx_notif',data.notifications||{items:[],snapshots:{},lastCheck:0});if(data.settings)writeJSONKey('svx_s',data.settings);if(data.sportPresets)writeJSONKey('svx_sport_presets',data.sportPresets);if(data.sourcePrefs)writeJSONKey('svx_src_pref',data.sourcePrefs);if(data.episodeSeen)writeJSONKey('svx_ep_seen',data.episodeSeen);if(data.history)writeJSONKey('svx_hist',data.history);}
 function doFullBackup(){const data={version:3,kind:'streamgn_full_backup',exportedAt:new Date().toISOString(),data:readAppData()};downloadJSON(data,`streamgn-backup-${new Date().toISOString().slice(0,10)}.json`);showToast('Backup completo esportato ✓');}
 function restoreFullBackup(data){if(data.kind!=='streamgn_full_backup'){showToast('Backup non valido');return;}openConfirm('Importare il <b>backup completo</b>?<br>Verranno ripristinati liste, progressi e impostazioni presenti nel file.',function(){const payload=data.data||data.profiles?.[0]?.data;if(!payload){showToast('Backup vuoto');return;}writeAppData(payload);refreshAfterStorageHydrated();showToast('Backup importato ✓',3000);});}
+function idsFromSelectedFolders(folders){
+  const ids=new Set();
+  Object.values(folders||{}).forEach(f=>(f.items||[]).forEach(it=>{if(it?.id!=null)ids.add(String(it.id));}));
+  return ids;
+}
+function contentIdFromEpisodeSeenKey(key){
+  const m=String(key||'').match(/^(.+)_s\d+_e\d+$/i);
+  return m?m[1]:'';
+}
+function contentIdFromHistoryKey(key,value){
+  if(value?.id!=null)return String(value.id);
+  const m=String(key||'').match(/^(?:movie|tv)_(.+?)(?:_s\d+_e\d+)?$/i);
+  return m?m[1]:'';
+}
+function mergeJSONStore(key,patch){
+  if(!patch||typeof patch!=='object')return;
+  const current=readJSONKey(key,{});
+  Object.assign(current,patch);
+  writeJSONKey(key,current);
+}
 async function saveOfflineLibrary(){
   const items=collectPersonalItems(160).map(item=>personalCardItem(item)).filter(item=>item.id);
   const snapshot={version:1,ts:Date.now(),items,calendar:calendarEntriesCache.map(e=>({id:e.id,type:e.type,title:e.title,poster:e.poster,date:e.date,label:e.label})),data:readAppData()};
@@ -623,11 +675,13 @@ function closeExportModal(){smoothClose(document.getElementById('export-sel-moda
 function doExport(){
   const sids=Array.from(document.querySelectorAll('.exp-chk:checked')).map(c=>c.dataset.fid);if(!sids.length){showToast('Seleziona almeno una lista');return;}
   const af=getFolders(),ef={};sids.forEach(fid=>{if(af[fid])ef[fid]=af[fid];});
-  const si=new Set();Object.values(ef).forEach(f=>(f.items||[]).forEach(it=>si.add(it.id)));
+  const si=idsFromSelectedFolders(ef);
   const aw=getWatching(),ew={};Object.entries(aw).forEach(([id,w])=>{if(si.has(id))ew[id]=w;});
   const ar=readJSONKey('svx_r',{}),er={};si.forEach(id=>{if(ar[id])er[id]=ar[id];});
   const ap=getProgressStore(),ep={};Object.entries(ap).forEach(([k,v])=>{if([...si].some(id=>k.includes(`_${id}_`)))ep[k]=v;});
-  const data={version:1,exportedAt:new Date().toISOString(),selectedFolders:sids,folders:ef,watching:ew,progress:ep,ratings:er};
+  const aes=getEpisodeSeenStore(),ee={};Object.entries(aes).forEach(([k,v])=>{if(si.has(contentIdFromEpisodeSeenKey(k)))ee[k]=v;});
+  const ah=readJSONKey('svx_hist',{}),eh={};Object.entries(ah).forEach(([k,v])=>{if(si.has(contentIdFromHistoryKey(k,v)))eh[k]=v;});
+  const data={version:2,exportedAt:new Date().toISOString(),selectedFolders:sids,folders:ef,watching:ew,progress:ep,ratings:er,episodeSeen:ee,history:eh};
   downloadJSON(data,`streamgn-liste-${new Date().toISOString().slice(0,10)}.json`);
   closeExportModal();showToast(`Esportate ${sids.length} list${sids.length===1?'a':'e'} ✓`);
 }
@@ -683,6 +737,8 @@ function doImport(){
   if(_importData.watching){const w=getWatching();Object.assign(w,_importData.watching);writeJSONKey('svx_w',w);}
   if(_importData.progress){const p=getProgressStore();Object.assign(p,_importData.progress);saveProgressStore(p);}
   if(_importData.ratings){const r=readJSONKey('svx_r',{});Object.assign(r,_importData.ratings);writeJSONKey('svx_r',r);}
+  if(_importData.episodeSeen)mergeJSONStore('svx_ep_seen',_importData.episodeSeen);
+  if(_importData.history)mergeJSONStore('svx_hist',_importData.history);
   closeImportModal();renderListePage();refreshCW();showToast(`${total} element${total===1?'o':'i'} importat${total===1?'o':'i'} ✓`,3000);
 }
 function importLists(file){const r=new FileReader();r.onload=e=>{try{const d=JSON.parse(e.target.result);if(d.kind==='streamgn_full_backup'){restoreFullBackup(d);return;}if(!d.version||!d.folders){showToast('File non valido');return;}openImportModal(d);}catch(err){showToast('Errore nella lettura del file');}};r.readAsText(file);}
@@ -1183,10 +1239,10 @@ async function animeSection(container,title,path,params,type='tv',tag=''){
   }catch(e){}
 }
 async function loadAnime(){
-  const url=normalizeUrl(ANIME_UNITY_URL),frame=document.getElementById('anime-iframe'),label=document.getElementById('anime-url-label'),open=document.getElementById('anime-open-link');
+  const sites=await fetchExternalSites(),url=siteUrlFromExternal(sites,'anime',ANIME_UNITY_URL),openUrl=siteOpenUrlFromExternal(sites,'anime',url),frame=document.getElementById('anime-iframe'),label=document.getElementById('anime-url-label'),open=document.getElementById('anime-open-link');
   loaded.anime=true;
   if(label)label.textContent=url;
-  if(open)open.href=url;
+  if(open)open.href=openUrl;
   setExternalFrame('anime',url,frame);
 }
 
@@ -1242,6 +1298,8 @@ async function loadSeasonCast(tvId,season){
 
 /* DETAIL */
 async function openDetail(id,type,poster,isAnime){
+  closeTransientLayers();
+  hardCloseLayer('#actor-modal');
   currentDetailId=String(id);currentDetailType=type;currentDetailIsAnime=!!isAnime;currentDetailPoster=poster||'';currentDetailSeasons=[];currentDetailAnimeTitles=[];hideTrailer();
   const bd=document.getElementById('dm-backdrop'),bdy=document.getElementById('dm-body');
   bd.style.backgroundImage=poster?`url('${IMG_W}${poster}')`:''
@@ -1322,7 +1380,10 @@ function actorCreditsRow(title,items,id){
   const clean=items.filter(x=>x.media_type==='movie'||x.media_type==='tv').sort((a,b)=>((b.release_date||b.first_air_date||'')||'').localeCompare((a.release_date||a.first_air_date||'')||'')).slice(0,80);
   return clean.length?`<div class="am-film-row"><div class="dm-section-title" style="margin-bottom:12px">${title}</div><div id="${id}" class="row" style="margin-bottom:2rem">${clean.map(x=>creditCardHTML({...x,media_type:x.media_type||'movie'})).join('')}</div></div>`:'';
 }
-function creditCardHTML(item){const base=cardHTML(item);const role=item.character||item.job||'';return role?base.replace('<div class="card-ov">',`<div class="credit-role">${ea(role)}</div><div class="card-ov">`):base;}
+function creditCardHTML(item){
+  const base=cardHTML(item),role=item.character||item.job||'';
+  return `<div class="credit-card-wrap">${base}${role?`<div class="credit-role-under">${ea(role)}</div>`:''}</div>`;
+}
 function personDateLabel(date){return date?new Date(date).toLocaleDateString('it-IT',{day:'numeric',month:'long',year:'numeric'}):'';}
 function personAge(info){
   if(!info.birthday)return '';
@@ -1333,6 +1394,8 @@ function personAge(info){
   return `${age} anni${info.deathday?' al decesso':''}`;
 }
 async function openActor(actorId){
+  closeTransientLayers();
+  hardCloseLayer('#detail-modal');
   const ab=document.getElementById('am-body'),actorModal=document.getElementById('actor-modal');ab.innerHTML='<div class="spin-wrap"><div class="spinner"></div></div>';actorModal.classList.add('open');resetPanelScroll(actorModal);lockBodyScroll();
   try{
     const [info,credits]=await Promise.all([tmdb(`/person/${actorId}`),tmdb(`/person/${actorId}/combined_credits`)]);
@@ -1675,9 +1738,24 @@ window.addEventListener('scroll',()=>stBtn.classList.toggle('visible',window.scr
 stBtn.addEventListener('click',()=>window.scrollTo({top:0,behavior:'smooth'}));
 
 /* NAV */
-function navigateHome(){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-home').classList.add('active');document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));document.querySelector('.nav-btn[data-page="home"]').classList.add('active');}
+function activatePage(pg){
+  const page=document.getElementById('page-'+pg);
+  if(!page)return;
+  closeContentLayers();
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  page.classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(x=>x.classList.toggle('active',x.dataset.page===pg));
+  if(pg==='sport')loadSport();
+  if(pg==='serie'&&!loaded.serie)loadSerie();
+  if(pg==='film'&&!loaded.film)loadFilm();
+  if(pg==='anime'&&!loaded.anime)loadAnime();
+  if(pg==='calendario')loadCalendario();
+  if(pg==='profilo')loadProfilo();
+  if(pg==='liste')renderListePage();
+}
+function navigateHome(){activatePage('home');}
 function normalizeUrl(url){url=String(url||'').trim();if(!url)return'';return /^https?:\/\//i.test(url)?url:'https://'+url;}
-let sportRemoteConfig=null;
+let sportRemoteConfig=null,externalSitesConfig=null;
 function isSportAdminMode(){
   try{
     const q=new URLSearchParams(location.search);
@@ -1696,10 +1774,29 @@ async function fetchRemoteConfig(force=false){
   }catch(e){sportRemoteConfig={sportUrl:SPORT_DEFAULT_URL};}
   return sportRemoteConfig;
 }
-function sportUrlFromConfig(cfg){return normalizeUrl(cfg?.sportUrl||cfg?.sport?.url||SPORT_DEFAULT_URL)||SPORT_DEFAULT_URL;}
-function isKnownFrameBlocked(url){
-  try{return FRAME_BLOCKED_HOSTS.includes(new URL(normalizeUrl(url),location.href).hostname.toLowerCase());}
-  catch(e){return false;}
+async function fetchExternalSites(force=false){
+  if(externalSitesConfig&&!force)return externalSitesConfig;
+  try{
+    const url=new URL(EXTERNAL_SITES_URL,location.href);
+    url.searchParams.set('_',Date.now());
+    const r=await fetch(url.toString(),{cache:'no-store'});
+    if(!r.ok)throw Error(r.status);
+    externalSitesConfig=await r.json();
+  }catch(e){
+    externalSitesConfig={anime:{url:ANIME_UNITY_URL},sport:{url:SPORT_DEFAULT_URL}};
+  }
+  return externalSitesConfig;
+}
+function siteUrlFromExternal(sites,kind,fallback){
+  const cfg=sites?.[kind]||{};
+  return normalizeUrl(cfg.proxyUrl||cfg.embedUrl||cfg.url||cfg.openUrl||fallback)||fallback;
+}
+function siteOpenUrlFromExternal(sites,kind,fallback){
+  const cfg=sites?.[kind]||{};
+  return normalizeUrl(cfg.openUrl||cfg.url||cfg.embedUrl||fallback)||fallback;
+}
+function sportUrlFromConfig(cfg,sites){
+  return siteUrlFromExternal(sites,'sport',normalizeUrl(cfg?.sportUrl||cfg?.sport?.url||SPORT_DEFAULT_URL)||SPORT_DEFAULT_URL);
 }
 function showIframeFallback(kind,url){
   const panel=document.getElementById(`${kind}-iframe-fallback`),open=document.getElementById(`${kind}-fallback-open`);
@@ -1712,33 +1809,38 @@ function hideIframeFallback(kind){
 }
 function setExternalFrame(kind,url,frame,force=false){
   if(!frame)return;
-  if(isKnownFrameBlocked(url)){
-    frame.dataset.url=url;
-    frame.src='about:blank';
-    showIframeFallback(kind,url);
-    return;
-  }
   hideIframeFallback(kind);
   frame.removeAttribute('sandbox');
-  if(force||frame.dataset.url!==url){frame.dataset.url=url;frame.src=url;}
+  const shouldLoad=force||frame.dataset.url!==url;
+  if(!shouldLoad){
+    if(frame.dataset.loaded==='1')hideIframeFallback(kind);
+    return;
+  }
+  frame.dataset.loaded='0';
+  if(frame._fallbackTimer)clearTimeout(frame._fallbackTimer);
+  frame.onload=()=>{frame.dataset.loaded='1';hideIframeFallback(kind);};
+  frame.onerror=()=>showIframeFallback(kind,url);
+  frame._fallbackTimer=setTimeout(()=>{if(frame.dataset.loaded!=='1')showIframeFallback(kind,url);},6500);
+  frame.dataset.url=url;
+  frame.src=url;
 }
 function renderSportAdmin(url){
   const panel=document.getElementById('sport-admin-panel'),link=document.getElementById('sport-admin-link'),input=document.getElementById('sport-admin-input');
   const admin=isSportAdminMode();
-  if(link)link.href=SPORT_ADMIN_EDIT_URL;
+  if(link)link.href=EXTERNAL_SITES_ADMIN_EDIT_URL||SPORT_ADMIN_EDIT_URL;
   if(panel)panel.style.display=admin?'flex':'none';
   if(link)link.style.display=admin?'inline-flex':'none';
   if(input&&admin)input.value=url;
 }
 async function loadSport(force=false){
-  const cfg=await fetchRemoteConfig(force),fallback=sportUrlFromConfig(cfg),si=document.getElementById('sport-iframe'),label=document.getElementById('sport-url-label'),open=document.getElementById('sport-open-link');
+  const [cfg,sites]=await Promise.all([fetchRemoteConfig(force),fetchExternalSites(force)]),fallback=sportUrlFromConfig(cfg,sites),si=document.getElementById('sport-iframe'),label=document.getElementById('sport-url-label'),open=document.getElementById('sport-open-link');
   let url=fallback;
   try{
     const result=await window.StreamGNProviders?.getSportStream?.({fallbackUrl:fallback,config:cfg,force});
     url=normalizeUrl(result?.embedUrl||result?.url||fallback);
   }catch(e){url=fallback;}
   if(label)label.textContent=url;
-  if(open)open.href=url;
+  if(open)open.href=siteOpenUrlFromExternal(sites,'sport',url);
   renderSportAdmin(url);
   setExternalFrame('sport',url,si,force);
 }
@@ -1746,7 +1848,8 @@ async function copySportConfig(){
   const input=document.getElementById('sport-admin-input');
   const url=normalizeUrl(input?.value||SPORT_DEFAULT_URL);
   if(!url){showToast('Inserisci un link valido');return;}
-  const text=JSON.stringify({sportUrl:url,updatedAt:new Date().toISOString()},null,2);
+  const sites=await fetchExternalSites(true);
+  const text=JSON.stringify({...sites,sport:{...(sites?.sport||{}),url,embedUrl:url,openUrl:url},updatedAt:new Date().toISOString()},null,2);
   try{await navigator.clipboard.writeText(text);showToast('Config copiata: incollala su GitHub');}
   catch(e){prompt('Copia questa config',text);}
 }
@@ -1756,7 +1859,7 @@ document.getElementById('btn-sport-copy-config')?.addEventListener('click',copyS
 document.getElementById('btn-anime-refresh')?.addEventListener('click',()=>{const frame=document.getElementById('anime-iframe');if(frame){frame.dataset.url='';frame.src='';}loaded.anime=false;loadAnime();});
 document.getElementById('btn-anime-fallback-refresh')?.addEventListener('click',()=>{const frame=document.getElementById('anime-iframe');if(frame){frame.dataset.url='';frame.src='';}loaded.anime=false;loadAnime();});
 document.getElementById('btn-calendar-refresh')?.addEventListener('click',()=>loadCalendario(true));
-document.querySelectorAll('.nav-btn[data-page]').forEach(b=>b.addEventListener('click',()=>{const pg=b.dataset.page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+pg).classList.add('active');document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');if(pg==='sport')loadSport();if(pg==='serie'&&!loaded.serie)loadSerie();if(pg==='film'&&!loaded.film)loadFilm();if(pg==='anime'&&!loaded.anime)loadAnime();if(pg==='calendario')loadCalendario();if(pg==='profilo')loadProfilo();if(pg==='liste')renderListePage();}));
+document.querySelectorAll('.nav-btn[data-page]').forEach(b=>b.addEventListener('click',()=>activatePage(b.dataset.page)));
 document.addEventListener('click',e=>{if(e.target.closest('[data-nav-home]')){if(document.getElementById('player-modal').classList.contains('open')){attemptClosePlayer();return;}if(document.getElementById('detail-modal').classList.contains('open'))closeDetail();else if(document.getElementById('actor-modal').classList.contains('open'))closeActor();else navigateHome();}});
 
 /* GLOBAL DELEGATION */
@@ -1971,11 +2074,63 @@ function renderNotifPanel(){
 }
 
 /* Permessi notifiche */
+function urlBase64ToUint8Array(base64String){
+  const padding='='.repeat((4-base64String.length%4)%4);
+  const base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');
+  const raw=atob(base64);
+  return Uint8Array.from([...raw].map(ch=>ch.charCodeAt(0)));
+}
+async function getPushConfig(){
+  const remote=await fetchRemoteConfig().catch(()=>({}));
+  const push=remote?.push||{};
+  return {
+    publicKey:push.publicKey||PUSH_PUBLIC_KEY,
+    subscribeUrl:push.subscribeUrl||PUSH_SUBSCRIBE_URL,
+    unsubscribeUrl:push.unsubscribeUrl||PUSH_UNSUBSCRIBE_URL
+  };
+}
+async function ensurePushSubscription(reg){
+  if(!reg?.pushManager||Notification.permission!=='granted')return false;
+  const cfg=await getPushConfig();
+  if(!cfg.publicKey||!cfg.subscribeUrl){
+    writeJSONKey('svx_push_status',{enabled:false,reason:'missing_config',ts:Date.now()});
+    setupNotifPermRow();
+    return false;
+  }
+  try{
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub){
+      sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(cfg.publicKey)});
+    }
+    const res=await fetch(cfg.subscribeUrl,{
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({
+        subscription:sub.toJSON(),
+        scope:location.origin,
+        timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||'',
+        dailyLimit:CONFIG.notificationDailyLimit||3,
+        quietWindowMs:CONFIG.notificationQuietWindow||8*60*60*1000,
+        ua:navigator.userAgent
+      })
+    });
+    writeJSONKey('svx_push_status',{enabled:res.ok,reason:res.ok?'subscribed':'server_error',ts:Date.now()});
+    setupNotifPermRow();
+    return res.ok;
+  }catch(e){
+    writeJSONKey('svx_push_status',{enabled:false,reason:'subscribe_error',ts:Date.now()});
+    setupNotifPermRow();
+    return false;
+  }
+}
 function setupNotifPermRow(){
   const row=document.getElementById('notif-perm-row');
   if(!row)return;
   if(!('Notification' in window)){row.textContent='';return;}
-  if(Notification.permission==='granted'){row.textContent='Push attive: massimo poche notifiche importanti al giorno.';}
+  const pushStatus=readJSONKey('svx_push_status',null);
+  if(Notification.permission==='granted'){
+    row.textContent=pushStatus?.enabled?'Push attive: poche notifiche importanti durante la giornata.':'Notifiche attive. Per riceverle anche a sito chiuso configura il Web Push nel file remoto.';
+  }
   else if(Notification.permission==='denied'){row.textContent='Notifiche bloccate: attivale dalle impostazioni del browser.';}
   else{row.textContent='Tocca la campanella per attivare le push importanti.';}
 }
@@ -1992,6 +2147,9 @@ async function requestNotifPermission(showFeedback=false){
   let permission='default';
   try{permission=await Notification.requestPermission();}catch(e){}
   if(permission!=='default')writeJSONKey(NOTIF_PROMPT_KEY,true);
+  if(permission==='granted'){
+    try{const reg=await navigator.serviceWorker?.ready;await ensurePushSubscription(reg);}catch(e){}
+  }
   setupNotifPermRow();
   if(showFeedback&&permission==='granted')showToast('Push importanti attivate');
   return permission;
@@ -2035,6 +2193,7 @@ async function registerNotificationWorker(){
     }
     const ready=await navigator.serviceWorker.ready;
     ready.active?.postMessage({type:'CHECK_UPDATES'});
+    if('Notification' in window&&Notification.permission==='granted')await ensurePushSubscription(ready);
   }catch(e){}
 }
 

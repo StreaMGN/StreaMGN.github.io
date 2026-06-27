@@ -3,5 +3,10 @@
   "streamApiBase": "",
   "streamripBaseUrl": "https://streamrip-website-production.up.railway.app",
   "aniListApiBase": "https://graphql.anilist.co",
-  "updatedAt": "2026-06-20T00:00:00.000Z"
+  "push": {
+    "publicKey": "",
+    "subscribeUrl": "",
+    "unsubscribeUrl": ""
+  },
+  "updatedAt": "2026-06-27T00:00:00.000Z"
 }

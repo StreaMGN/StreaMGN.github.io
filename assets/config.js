@@ -12,7 +12,9 @@ window.STREAMGN_CONFIG = {
   sportDefaultUrl: 'https://pepperstream.xyz/index.php',
   animeUnityUrl: 'https://www.animeunity.so',
   remoteConfigUrl: 'assets/remote-config.json',
+  externalSitesUrl: 'assets/external-sites.json',
   sportAdminEditUrl: 'https://github.com/StreaMGN/StreaMGN.github.io/edit/main/assets/remote-config.json',
+  externalSitesAdminEditUrl: 'https://github.com/StreaMGN/StreaMGN.github.io/edit/main/assets/external-sites.json',
   streamApiBase: '',
   streamRoutes: {
     movie: '/play/movie/:id',
@@ -34,5 +36,10 @@ window.STREAMGN_CONFIG = {
   aniListApiBase: 'https://graphql.anilist.co',
   tmdbCacheMaxAge: 6 * 60 * 60 * 1000,
   tmdbCacheMaxItems: 260,
-  notificationInterval: 6 * 60 * 60 * 1000
+  notificationInterval: 6 * 60 * 60 * 1000,
+  notificationDailyLimit: 3,
+  notificationQuietWindow: 8 * 60 * 60 * 1000,
+  pushPublicKey: '',
+  pushSubscribeUrl: '',
+  pushUnsubscribeUrl: ''
 };

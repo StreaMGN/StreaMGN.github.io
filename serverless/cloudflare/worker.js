@@ -13,8 +13,8 @@ const DEFAULTS={
 function corsHeaders(env){
   return {
     'access-control-allow-origin':env.CORS_ORIGIN||'*',
-    'access-control-allow-methods':'GET,OPTIONS',
-    'access-control-allow-headers':'content-type',
+    'access-control-allow-methods':'GET,POST,OPTIONS',
+    'access-control-allow-headers':'content-type,authorization',
     'cache-control':'no-store'
   };
 }
@@ -188,13 +188,156 @@ async function handleSport(request,env){
   return json(await firstWorking(providers,{configured:configuredSportProvider},ctx,env),200,env);
 }
 
+function base64Url(input){
+  const bytes=typeof input==='string'?new TextEncoder().encode(input):new Uint8Array(input);
+  let binary='';
+  bytes.forEach(b=>{binary+=String.fromCharCode(b);});
+  return btoa(binary).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function derToJose(signature){
+  const bytes=new Uint8Array(signature);
+  if(bytes.length===64)return bytes;
+  if(bytes[0]!==0x30)return bytes;
+  let offset=2;
+  if(bytes[offset]!==0x02)return bytes;
+  const rLen=bytes[offset+1];
+  let r=bytes.slice(offset+2,offset+2+rLen);
+  offset=offset+2+rLen;
+  if(bytes[offset]!==0x02)return bytes;
+  const sLen=bytes[offset+1];
+  let s=bytes.slice(offset+2,offset+2+sLen);
+  if(r[0]===0)r=r.slice(1);
+  if(s[0]===0)s=s.slice(1);
+  const out=new Uint8Array(64);
+  out.set(r.slice(-32),32-Math.min(32,r.length));
+  out.set(s.slice(-32),64-Math.min(32,s.length));
+  return out;
+}
+async function sha256Hex(value){
+  const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));
+  return [...new Uint8Array(hash)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function vapidJwt(endpoint,env){
+  const aud=new URL(endpoint).origin;
+  const subject=env.VAPID_SUBJECT||'mailto:admin@streamgn.github.io';
+  const header=base64Url(JSON.stringify({typ:'JWT',alg:'ES256'}));
+  const payload=base64Url(JSON.stringify({aud,exp:Math.floor(Date.now()/1000)+12*60*60,sub:subject}));
+  const signingInput=`${header}.${payload}`;
+  const jwk=JSON.parse(env.VAPID_PRIVATE_JWK||'{}');
+  const key=await crypto.subtle.importKey('jwk',jwk,{name:'ECDSA',namedCurve:'P-256'},false,['sign']);
+  const sig=await crypto.subtle.sign({name:'ECDSA',hash:'SHA-256'},key,new TextEncoder().encode(signingInput));
+  return `${signingInput}.${base64Url(derToJose(sig))}`;
+}
+function pushStore(env){return env.PUSH_SUBSCRIPTIONS||null;}
+async function handlePushSubscribe(request,env){
+  const store=pushStore(env);
+  if(!store)return json({ok:false,error:'PUSH_SUBSCRIPTIONS KV not configured'},503,env);
+  let body={};
+  try{body=await request.json();}catch(e){}
+  const subscription=body.subscription||body;
+  if(!subscription?.endpoint||!subscription?.keys?.p256dh||!subscription?.keys?.auth)return json({ok:false,error:'invalid subscription'},400,env);
+  const key='sub:'+await sha256Hex(subscription.endpoint);
+  const prev=await store.get(key,'json');
+  const now=Date.now();
+  await store.put(key,JSON.stringify({
+    ...(prev||{}),
+    subscription,
+    scope:body.scope||prev?.scope||'',
+    timezone:body.timezone||prev?.timezone||'',
+    dailyLimit:Number(body.dailyLimit||prev?.dailyLimit||3),
+    quietWindowMs:Number(body.quietWindowMs||prev?.quietWindowMs||8*60*60*1000),
+    ua:body.ua||prev?.ua||'',
+    createdAt:prev?.createdAt||now,
+    updatedAt:now
+  }));
+  return json({ok:true},200,env);
+}
+async function handlePushUnsubscribe(request,env){
+  const store=pushStore(env);
+  if(!store)return json({ok:false,error:'PUSH_SUBSCRIPTIONS KV not configured'},503,env);
+  let body={};
+  try{body=await request.json();}catch(e){}
+  const endpoint=body.endpoint||body.subscription?.endpoint;
+  if(!endpoint)return json({ok:false,error:'missing endpoint'},400,env);
+  await store.delete('sub:'+await sha256Hex(endpoint));
+  return json({ok:true},200,env);
+}
+function sameDay(a,b){return new Date(a).toISOString().slice(0,10)===new Date(b).toISOString().slice(0,10);}
+function canSendServerPush(record,now){
+  const limit=Math.max(1,Number(record.dailyLimit||3));
+  const quiet=Math.max(60*60*1000,Number(record.quietWindowMs||8*60*60*1000));
+  if(record.lastSentAt&&now-record.lastSentAt<quiet)return false;
+  if(record.lastSentAt&&sameDay(record.lastSentAt,now)&&(record.dayCount||0)>=limit)return false;
+  return true;
+}
+function markServerPush(record,now){
+  if(record.lastSentAt&&sameDay(record.lastSentAt,now))record.dayCount=(record.dayCount||0)+1;
+  else record.dayCount=1;
+  record.lastSentAt=now;
+  return record;
+}
+async function sendEmptyWebPush(subscription,env){
+  if(!env.VAPID_PUBLIC_KEY||!env.VAPID_PRIVATE_JWK)throw new Error('missing VAPID keys');
+  const token=await vapidJwt(subscription.endpoint,env);
+  return fetch(subscription.endpoint,{
+    method:'POST',
+    headers:{
+      ttl:String(env.PUSH_TTL||'43200'),
+      urgency:'low',
+      authorization:`vapid t=${token}, k=${env.VAPID_PUBLIC_KEY}`
+    }
+  });
+}
+async function broadcastPushes(env,{force=false}={}){
+  const store=pushStore(env);
+  if(!store)return {ok:false,error:'PUSH_SUBSCRIPTIONS KV not configured'};
+  if(!env.VAPID_PUBLIC_KEY||!env.VAPID_PRIVATE_JWK)return {ok:false,error:'missing VAPID keys'};
+  let cursor,checked=0,sent=0,removed=0,failed=0;
+  const now=Date.now();
+  do{
+    const page=await store.list({prefix:'sub:',cursor,limit:100});
+    cursor=page.cursor;
+    for(const item of page.keys){
+      checked++;
+      const record=await store.get(item.name,'json');
+      if(!record?.subscription?.endpoint)continue;
+      if(!force&&!canSendServerPush(record,now))continue;
+      try{
+        const res=await sendEmptyWebPush(record.subscription,env);
+        if(res.status===404||res.status===410){await store.delete(item.name);removed++;continue;}
+        if(!res.ok){failed++;continue;}
+        sent++;
+        await store.put(item.name,JSON.stringify(markServerPush(record,now)));
+      }catch(e){failed++;}
+    }
+  }while(cursor);
+  return {ok:true,checked,sent,removed,failed};
+}
+function isAuthorized(request,env){
+  const token=env.PUSH_ADMIN_TOKEN;
+  if(!token)return false;
+  const auth=request.headers.get('authorization')||'';
+  return auth===`Bearer ${token}`;
+}
+async function handlePushBroadcast(request,env){
+  if(!isAuthorized(request,env))return json({ok:false,error:'unauthorized'},401,env);
+  const url=new URL(request.url);
+  return json(await broadcastPushes(env,{force:url.searchParams.get('force')==='1'}),200,env);
+}
+
 export default {
   async fetch(request,env){
     if(request.method==='OPTIONS')return new Response(null,{headers:corsHeaders(env)});
     const parts=splitPath(request.url);
     if(parts[0]==='health')return json({ok:true,service:'streamgn-provider-api'},200,env);
+    if(parts[0]==='push'&&parts[1]==='subscribe'&&request.method==='POST')return handlePushSubscribe(request,env);
+    if(parts[0]==='push'&&parts[1]==='unsubscribe'&&request.method==='POST')return handlePushUnsubscribe(request,env);
+    if(parts[0]==='push'&&parts[1]==='broadcast'&&request.method==='POST')return handlePushBroadcast(request,env);
     if(parts[0]==='play')return handlePlay(request,env);
     if(parts[0]==='sport'&&parts[1]==='live')return handleSport(request,env);
     return json({ok:false,error:'not found'},404,env);
+  },
+  async scheduled(event,env,ctx){
+    ctx.waitUntil(broadcastPushes(env).catch(()=>{}));
   }
 };
