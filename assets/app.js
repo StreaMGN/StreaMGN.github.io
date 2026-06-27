@@ -1799,6 +1799,26 @@ async function checkForUpdates(force=false,{push=true}={}){
   updateNotifBadge();
   return created.length;
 }
+let notifUpdateRunning=false;
+let notifUpdateQueued=false;
+async function runNotifUpdate(force=false,opts={}){
+  if(notifUpdateRunning){
+    notifUpdateQueued=true;
+    return 0;
+  }
+  notifUpdateRunning=true;
+  try{
+    return await checkForUpdates(force,opts);
+  }catch(e){
+    return 0;
+  }finally{
+    notifUpdateRunning=false;
+    if(notifUpdateQueued){
+      notifUpdateQueued=false;
+      queueMicrotask(()=>runNotifUpdate(false,{push:false}).catch(()=>{}));
+    }
+  }
+}
 
 /* Render pannello */
 function renderNotifPanel(){
@@ -1928,7 +1948,7 @@ document.getElementById('notif-panel').addEventListener('click',e=>{
 document.getElementById('btn-notif-check').addEventListener('click',async()=>{
   const btn=document.getElementById('btn-notif-check');
   btn.textContent='⏳ Controllo…';btn.disabled=true;
-  const cnt=await checkForUpdates(true,{push:false});
+  const cnt=await runNotifUpdate(true,{push:false});
   renderNotifPanel();
   btn.textContent='🔄 Aggiorna';btn.disabled=false;
   if(cnt>0)showToast(`${cnt} aggiornament${cnt===1?'o':'i'} importante${cnt===1?'':'i'}`,3000);
@@ -1977,9 +1997,9 @@ setTimeout(()=>showOnboardingPrompt(),2200);
 /* Avvio automatico: controlla aggiornamenti dopo 3s dall'apertura */
 setTimeout(async()=>{
   updateNotifBadge();
-  await checkForUpdates(false);
+  await runNotifUpdate(false);
   updateNotifBadge();
 },3000);
-setInterval(()=>checkForUpdates(false).then(updateNotifBadge).catch(()=>{}),60*60*1000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkForUpdates(false,{push:false}).then(updateNotifBadge).catch(()=>{});});
-window.addEventListener('online',()=>checkForUpdates(false,{push:false}).then(updateNotifBadge).catch(()=>{}));
+setInterval(()=>runNotifUpdate(false).then(updateNotifBadge).catch(()=>{}),60*60*1000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)runNotifUpdate(false,{push:false}).then(updateNotifBadge).catch(()=>{});});
+window.addEventListener('online',()=>runNotifUpdate(false,{push:false}).then(updateNotifBadge).catch(()=>{}));
