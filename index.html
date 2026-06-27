@@ -53,7 +53,7 @@
   } catch (e) {}
 })();
 </script>
-<link rel="stylesheet" href="assets/styles.css?v=20260627-readability1">
+<link rel="stylesheet" href="assets/styles.css?v=20260627-stability1">
 </head>
 <body>
 
@@ -198,7 +198,7 @@
       <span class="player-source-state" id="player-source-state">Sorgente non verificata</span>
     </div>
     <div class="player-box">
-      <iframe id="vix-frame" allow="autoplay; fullscreen; picture-in-picture; encrypted-media; airplay" allowfullscreen playsinline webkit-playsinline referrerpolicy="no-referrer"></iframe>
+      <iframe id="vix-frame" allow="autoplay; fullscreen; picture-in-picture; encrypted-media; airplay" allowfullscreen playsinline webkit-playsinline referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-popups allow-popups-to-escape-sandbox allow-downloads"></iframe>
       <video id="stream-video" controls playsinline webkit-playsinline preload="metadata" style="display:none"></video>
     </div>
   </div>
@@ -258,7 +258,7 @@
       <span class="sp-admin-help">Modifica assets/external-sites.json su GitHub: il link cambia per tutti.</span>
     </div>
     <div id="sport-iframe-wrap">
-      <iframe id="sport-iframe" src="" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" referrerpolicy="no-referrer" allowfullscreen></iframe>
+      <iframe id="sport-iframe" src="" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" referrerpolicy="no-referrer" allowfullscreen sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-popups allow-popups-to-escape-sandbox allow-downloads"></iframe>
       <div class="iframe-fallback" id="sport-iframe-fallback" hidden>
         <div class="iframe-fallback-box">
           <div class="iframe-fallback-kicker">Apertura integrata bloccata</div>
@@ -282,7 +282,7 @@
       <a class="sp-iframe-btn" id="anime-open-link" href="https://www.animeunity.so" target="_blank" rel="noopener"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Apri fuori</a>
     </div>
     <div id="anime-iframe-wrap">
-      <iframe id="anime-iframe" src="" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" referrerpolicy="no-referrer" allowfullscreen></iframe>
+      <iframe id="anime-iframe" src="" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" referrerpolicy="no-referrer" allowfullscreen sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-popups allow-popups-to-escape-sandbox allow-downloads"></iframe>
       <div class="iframe-fallback" id="anime-iframe-fallback" hidden>
         <div class="iframe-fallback-box">
           <div class="iframe-fallback-kicker">Apertura integrata bloccata</div>
@@ -319,6 +319,6 @@
 </div>
 <script src="assets/config.js"></script>
 <script src="assets/providers.js"></script>
-<script src="assets/app.js?v=20260627-readability1"></script>
+<script src="assets/app.js?v=20260627-stability1"></script>
 </body>
 </html>

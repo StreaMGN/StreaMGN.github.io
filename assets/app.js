@@ -259,6 +259,7 @@ function showToast(msg,dur=2400){
 /* SETTINGS */
 const themeMedia=window.matchMedia?window.matchMedia('(prefers-color-scheme: light)'):null;
 let contrastFrame=0;
+let viewportUpdateTimer=0;
 function loadSettings(){return{lang:'it',subs:'none',theme:'system',...readJSONKey('svx_s',{})};}
 function saveSettings(patch){const next={...loadSettings(),...patch};writeJSONKey('svx_s',next);return next;}
 function resolveTheme(choice){return choice==='light'||choice==='dark'?choice:(themeMedia?.matches?'light':'dark');}
@@ -373,6 +374,20 @@ function initReadableContrast(){
   else document.addEventListener('DOMContentLoaded',start,{once:true});
 }
 initReadableContrast();
+
+/* MOBILE VIEWPORT STABILITY */
+function syncViewportMetrics(){
+  document.documentElement.style.setProperty('--app-vh',`${window.innerHeight||document.documentElement.clientHeight}px`);
+  document.documentElement.style.setProperty('--app-vw',`${window.innerWidth||document.documentElement.clientWidth}px`);
+}
+function scheduleViewportSync(){
+  clearTimeout(viewportUpdateTimer);
+  viewportUpdateTimer=setTimeout(()=>{syncViewportMetrics();requestReadableContrast();},180);
+}
+syncViewportMetrics();
+window.addEventListener('resize',scheduleViewportSync,{passive:true});
+window.addEventListener('orientationchange',()=>setTimeout(scheduleViewportSync,260),{passive:true});
+window.addEventListener('pageshow',e=>{syncViewportMetrics();if(e.persisted)requestReadableContrast();},{passive:true});
 
 /* SEARCH HISTORY */
 function getSH(){return readJSONKey('svx_sh',[]);}
@@ -861,6 +876,7 @@ async function resolveStreamUrl(id,type,season,episode,src,startSecs){
 }
 async function setPlayerFrameSrc(id,type,season,episode,src,startSecs){
   const fr=document.getElementById('vix-frame');if(!fr)return;
+  applySavedPlayerSandbox();
   const seq=++playerStreamSeq,fallback=getEmbedUrl(id,type,season,episode,src,startSecs),providers=window.StreamGNProviders,anime=isAnimeSource(src);
   if(anime)setFrameMessage(fr,'Caricamento episodio','Un attimo.');
   else{showIframePlayer(fr);fr.removeAttribute('srcdoc');fr.src=providers?.hasBackend?.()?'about:blank':fallback;}
@@ -1461,7 +1477,11 @@ function updateSourceState(){
   const el=document.getElementById('player-source-state');if(!el)return;
   el.textContent=getSourceLabel(currentSrc);
 }
-function applySavedPlayerSandbox(){document.getElementById('vix-frame')?.removeAttribute('sandbox');}
+const PLAYER_IFRAME_SANDBOX='allow-scripts allow-same-origin allow-forms allow-presentation allow-popups allow-popups-to-escape-sandbox allow-downloads';
+function applySavedPlayerSandbox(){
+  const fr=document.getElementById('vix-frame');
+  if(fr)fr.setAttribute('sandbox',PLAYER_IFRAME_SANDBOX);
+}
 function buildSrcToggle(isAnime){const sources=getSourceList(isAnime);const toggle=document.getElementById('src-toggle');toggle.innerHTML=sources.length>1?sources.map(s=>`<button class="src-btn${s.id===currentSrc?' active':''}" data-src="${s.id}">${s.label}</button>`).join(''):'';toggle.querySelectorAll('.src-btn').forEach(b=>b.addEventListener('click',function(){currentSrc=this.dataset.src;setPreferredSource(currentTvId,playerProgType,playerProgSeason,playerProgEpisode,currentSrc);toggle.querySelectorAll('.src-btn').forEach(x=>x.classList.toggle('active',x.dataset.src===currentSrc));reloadPlayer();}));updateSourceState();}
 function reloadPlayer(saveFirst=true){if(saveFirst)requestPlayerRealProgress();clearTimeout(playerSourceHealthTimer);const tc=document.getElementById('tv-ctrl');const s=document.getElementById('s-sel').value||1,ep=document.getElementById('e-sel').value||1;applySavedPlayerSandbox();if(tc.style.display!=='none'&&currentTvId){const prog=getProgress(currentTvId,'tv',s,ep);setPlayerFrameSrc(currentTvId,'tv',s,ep,currentSrc,prog?prog.secs:0);resetPlayerAutoClock();}else if(currentTvId){const prog=getProgress(currentTvId,'movie',null,null);setPlayerFrameSrc(currentTvId,'movie',null,null,currentSrc,prog?prog.secs:0);resetPlayerAutoClock();}updateSourceState();}
 function updateDeviceMediaSession(title,type,poster,season,episode){
@@ -1573,9 +1593,9 @@ document.addEventListener('visibilitychange',()=>{
   if(!playerOpen)return;
   if(document.hidden){
     persistEstimatedProgress();
-    activatePiP(true); // silenzioso, nessun toast
+    return;
   } else {
-    /* Tornato nell'app: esci dal fullscreen se siamo in PiP auto su iOS */
+    syncViewportMetrics();
     if(pipActive&&(isIOS||isSafari)){
       try{
         if(document.webkitExitFullscreen)document.webkitExitFullscreen();
@@ -1842,10 +1862,11 @@ function hideIframeFallback(kind){
   const panel=document.getElementById(`${kind}-iframe-fallback`);
   if(panel)panel.hidden=true;
 }
+const EXTERNAL_IFRAME_SANDBOX='allow-scripts allow-same-origin allow-forms allow-presentation allow-popups allow-popups-to-escape-sandbox allow-downloads';
 function setExternalFrame(kind,url,frame,force=false){
   if(!frame)return;
   hideIframeFallback(kind);
-  frame.removeAttribute('sandbox');
+  frame.setAttribute('sandbox',EXTERNAL_IFRAME_SANDBOX);
   const shouldLoad=force||frame.dataset.url!==url;
   if(!shouldLoad){
     if(frame.dataset.loaded==='1')hideIframeFallback(kind);
@@ -2307,11 +2328,19 @@ function showOnboardingPrompt(attempt=0){
 setTimeout(()=>showOnboardingPrompt(),2200);
 
 /* Avvio automatico: controlla aggiornamenti dopo 3s dall'apertura */
+let notifForegroundCheckAt=0;
+function runNotifForegroundCheck(){
+  if(document.getElementById('player-modal')?.classList.contains('open'))return;
+  const now=Date.now();
+  if(now-notifForegroundCheckAt<10*60*1000)return;
+  notifForegroundCheckAt=now;
+  runNotifUpdate(false,{push:false}).then(updateNotifBadge).catch(()=>{});
+}
 setTimeout(async()=>{
   updateNotifBadge();
   await runNotifUpdate(false);
   updateNotifBadge();
 },3000);
 setInterval(()=>runNotifUpdate(false).then(updateNotifBadge).catch(()=>{}),60*60*1000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)runNotifUpdate(false,{push:false}).then(updateNotifBadge).catch(()=>{});});
-window.addEventListener('online',()=>runNotifUpdate(false,{push:false}).then(updateNotifBadge).catch(()=>{}));
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)runNotifForegroundCheck();});
+window.addEventListener('online',runNotifForegroundCheck);

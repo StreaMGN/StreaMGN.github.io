@@ -95,6 +95,31 @@ Il repository include anche `.github/workflows/deploy-worker.yml`.
 
 Da quel momento le sezioni Anime e Sport useranno il proxy `/external/anime` e `/external/sport` per restare visibili dentro il sito.
 
+### Errore workers.dev non registrato
+
+Se GitHub Actions fallisce con:
+
+```text
+You need to register a workers.dev subdomain before publishing to workers.dev
+```
+
+non e un errore del codice: Cloudflare deve ancora creare il sottodominio Workers dell'account.
+
+1. Apri Cloudflare Dashboard.
+2. Vai su `Workers & Pages`.
+3. Entra nella schermata iniziale/onboarding dei Workers.
+4. Registra un sottodominio `workers.dev` quando Cloudflare lo chiede.
+5. Torna su GitHub -> `Actions` -> `Deploy StreamGN Worker`.
+6. Premi `Run workflow`.
+
+Quando il deploy riesce, l'URL sara simile a:
+
+```text
+https://streamgn-provider-api.<tuo-subdomain>.workers.dev
+```
+
+Copialo in `assets/remote-config.json` dentro `streamApiBase`.
+
 ## Note provider anime
 
 - `STREAMRIP_BASE_URL` controlla la base dell'iframe anime.
