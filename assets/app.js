@@ -810,11 +810,7 @@ function withTimeout(promise,ms,message='timeout'){
 async function ensureStreamRemoteConfig(){
   try{
     const cfg=await fetchRemoteConfig();
-    if(!cfg)return;
-    if(cfg.streamApiBase)window.STREAMGN_CONFIG.streamApiBase=cfg.streamApiBase;
-    if(cfg.streamripBaseUrl)window.STREAMGN_CONFIG.streamripBaseUrl=cfg.streamripBaseUrl;
-    if(cfg.animeProviderBase)window.STREAMGN_CONFIG.animeProviderBase=cfg.animeProviderBase;
-    if(cfg.aniListApiBase)window.STREAMGN_CONFIG.aniListApiBase=cfg.aniListApiBase;
+    applyRemoteRuntimeConfig(cfg);
   }catch(e){}
 }
 function getAnimeFlatEpisode(season,episode){
@@ -1239,9 +1235,9 @@ async function animeSection(container,title,path,params,type='tv',tag=''){
   }catch(e){}
 }
 async function loadAnime(){
-  const sites=await fetchExternalSites(),url=siteUrlFromExternal(sites,'anime',ANIME_UNITY_URL),openUrl=siteOpenUrlFromExternal(sites,'anime',url),frame=document.getElementById('anime-iframe'),label=document.getElementById('anime-url-label'),open=document.getElementById('anime-open-link');
+  const [,sites]=await Promise.all([fetchRemoteConfig(),fetchExternalSites()]),rawUrl=siteRawUrlFromExternal(sites,'anime',ANIME_UNITY_URL),url=siteUrlFromExternal(sites,'anime',rawUrl),openUrl=siteOpenUrlFromExternal(sites,'anime',rawUrl),frame=document.getElementById('anime-iframe'),label=document.getElementById('anime-url-label'),open=document.getElementById('anime-open-link');
   loaded.anime=true;
-  if(label)label.textContent=url;
+  if(label)label.textContent=rawUrl;
   if(open)open.href=openUrl;
   setExternalFrame('anime',url,frame);
 }
@@ -1756,6 +1752,21 @@ function activatePage(pg){
 function navigateHome(){activatePage('home');}
 function normalizeUrl(url){url=String(url||'').trim();if(!url)return'';return /^https?:\/\//i.test(url)?url:'https://'+url;}
 let sportRemoteConfig=null,externalSitesConfig=null;
+function applyRemoteRuntimeConfig(cfg){
+  if(!cfg)return;
+  if(cfg.streamApiBase)window.STREAMGN_CONFIG.streamApiBase=cfg.streamApiBase;
+  if(cfg.streamripBaseUrl)window.STREAMGN_CONFIG.streamripBaseUrl=cfg.streamripBaseUrl;
+  if(cfg.animeProviderBase)window.STREAMGN_CONFIG.animeProviderBase=cfg.animeProviderBase;
+  if(cfg.aniListApiBase)window.STREAMGN_CONFIG.aniListApiBase=cfg.aniListApiBase;
+}
+function streamApiBase(){return String(window.STREAMGN_CONFIG?.streamApiBase||CONFIG.streamApiBase||'').replace(/\/$/,'');}
+function externalProxyUrl(kind,target){
+  const base=streamApiBase(),url=normalizeUrl(target);
+  if(!base||!url)return '';
+  const out=new URL(`${base}/external/${kind}`);
+  out.searchParams.set('url',url);
+  return out.toString();
+}
 function isSportAdminMode(){
   try{
     const q=new URLSearchParams(location.search);
@@ -1771,6 +1782,7 @@ async function fetchRemoteConfig(force=false){
     const r=await fetch(url.toString(),{cache:'no-store'});
     if(!r.ok)throw Error(r.status);
     sportRemoteConfig=await r.json();
+    applyRemoteRuntimeConfig(sportRemoteConfig);
   }catch(e){sportRemoteConfig={sportUrl:SPORT_DEFAULT_URL};}
   return sportRemoteConfig;
 }
@@ -1789,14 +1801,37 @@ async function fetchExternalSites(force=false){
 }
 function siteUrlFromExternal(sites,kind,fallback){
   const cfg=sites?.[kind]||{};
-  return normalizeUrl(cfg.proxyUrl||cfg.embedUrl||cfg.url||cfg.openUrl||fallback)||fallback;
+  const raw=siteRawUrlFromExternal(sites,kind,fallback);
+  if(cfg.proxyUrl)return normalizeUrl(cfg.proxyUrl)||raw;
+  if(cfg.proxy!==false){
+    const proxied=externalProxyUrl(kind,raw);
+    if(proxied)return proxied;
+  }
+  return raw;
+}
+function siteRawUrlFromExternal(sites,kind,fallback){
+  const cfg=sites?.[kind]||{};
+  return normalizeUrl(cfg.embedUrl||cfg.url||cfg.openUrl||fallback)||fallback;
 }
 function siteOpenUrlFromExternal(sites,kind,fallback){
   const cfg=sites?.[kind]||{};
   return normalizeUrl(cfg.openUrl||cfg.url||cfg.embedUrl||fallback)||fallback;
 }
+function withExternalProxy(kind,rawUrl,siteCfg){
+  const raw=normalizeUrl(rawUrl);
+  if(!raw)return '';
+  if(siteCfg?.proxyUrl)return normalizeUrl(siteCfg.proxyUrl)||raw;
+  if(siteCfg?.proxy!==false){
+    const proxied=externalProxyUrl(kind,raw);
+    if(proxied)return proxied;
+  }
+  return raw;
+}
+function sportRawUrlFromConfig(cfg,sites){
+  return siteRawUrlFromExternal(sites,'sport',normalizeUrl(cfg?.sportUrl||cfg?.sport?.url||SPORT_DEFAULT_URL)||SPORT_DEFAULT_URL);
+}
 function sportUrlFromConfig(cfg,sites){
-  return siteUrlFromExternal(sites,'sport',normalizeUrl(cfg?.sportUrl||cfg?.sport?.url||SPORT_DEFAULT_URL)||SPORT_DEFAULT_URL);
+  return siteUrlFromExternal(sites,'sport',sportRawUrlFromConfig(cfg,sites));
 }
 function showIframeFallback(kind,url){
   const panel=document.getElementById(`${kind}-iframe-fallback`),open=document.getElementById(`${kind}-fallback-open`);
@@ -1833,14 +1868,15 @@ function renderSportAdmin(url){
   if(input&&admin)input.value=url;
 }
 async function loadSport(force=false){
-  const [cfg,sites]=await Promise.all([fetchRemoteConfig(force),fetchExternalSites(force)]),fallback=sportUrlFromConfig(cfg,sites),si=document.getElementById('sport-iframe'),label=document.getElementById('sport-url-label'),open=document.getElementById('sport-open-link');
-  let url=fallback;
+  const [cfg,sites]=await Promise.all([fetchRemoteConfig(force),fetchExternalSites(force)]),rawFallback=sportRawUrlFromConfig(cfg,sites),fallback=sportUrlFromConfig(cfg,sites),si=document.getElementById('sport-iframe'),label=document.getElementById('sport-url-label'),open=document.getElementById('sport-open-link');
+  let rawUrl=rawFallback,url=fallback;
   try{
-    const result=await window.StreamGNProviders?.getSportStream?.({fallbackUrl:fallback,config:cfg,force});
-    url=normalizeUrl(result?.embedUrl||result?.url||fallback);
+    const result=await window.StreamGNProviders?.getSportStream?.({fallbackUrl:rawFallback,config:cfg,force});
+    rawUrl=normalizeUrl(result?.embedUrl||result?.url||rawFallback);
+    url=withExternalProxy('sport',rawUrl,sites?.sport);
   }catch(e){url=fallback;}
-  if(label)label.textContent=url;
-  if(open)open.href=siteOpenUrlFromExternal(sites,'sport',url);
+  if(label)label.textContent=rawUrl;
+  if(open)open.href=siteOpenUrlFromExternal(sites,'sport',rawUrl);
   renderSportAdmin(url);
   setExternalFrame('sport',url,si,force);
 }
