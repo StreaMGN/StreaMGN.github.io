@@ -7,6 +7,8 @@ let heroItems=[],heroIdx=0,heroTimer,currentTvId=null,currentSrc='vixsrc',curren
 let currentDetailId=null,currentDetailType=null,currentDetailTitle='',currentDetailPoster='',currentDetailIsAnime=false,currentDetailSeasons=[];
 let fpCurrentItem=null,fpPendingCat=null,confirmCallback=null,searchAddToFolderId=null,searchAddFolderName='';
 const loaded={home:false,serie:false,film:false,anime:false,calendario:false,profilo:false};
+const loadTokens={home:0,serie:0,film:0};
+const SECTION_CARD_LIMIT=16,HOME_DISCOVER_DELAY=180;
 const randomPools={serie:[],film:[],anime:[]};
 let activeFilterGenre={serie:null,film:null},currentTrailerKey=null,epChangeTimer=null,listeFilter='all',listeSort='recent';
 let playerProgId=null,playerProgType=null,playerProgSeason=null,playerProgEpisode=null,playerNoteSavedThisSession=false;
@@ -183,6 +185,7 @@ function resetPanelScroll(target){
 const ea=s=>String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const fmtMin=m=>{if(!m)return null;const h=Math.floor(m/60),r=m%60;return h?`${h}h ${r}m`:`${r}m`;};
 const fmtBinge=m=>{if(!m||m<1)return null;const h=Math.floor(m/60),d=Math.floor(h/24),rh=h%24;return d>0?`${d}g ${rh}h`:`${h}h ${m%60}m`;};
+const defer=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 function buildEntityUrl(kind,id,type,isAnime=false){const url=new URL(location.href);url.searchParams.set(kind==='actor'?'actor':'id',id);if(kind!=='actor'){url.searchParams.set('type',type||'movie');if(isAnime)url.searchParams.set('anime','1');else url.searchParams.delete('anime');}return url.toString();}
 async function shareEntity(title,url){
   try{if(navigator.share){await navigator.share({title:title||'StreaMGN',url});return;}}catch(e){}
@@ -833,40 +836,61 @@ async function getCalendarEntries(limit=60){
   }));
   return entries.sort((a,b)=>String(a.date).localeCompare(String(b.date))).slice(0,36);
 }
-async function addPersonalHomeSections(container){
+async function addPersonalHomeSections(container,isCurrent=()=>true){
   const personal=collectPersonalItems(28).map(item=>personalCardItem(item,'Dalle tue liste')).filter(x=>x.poster_path);
-  if(personal.length)addSec(container,'Dalle tue liste',personal.slice(0,18),null,'smart');
+  if(personal.length&&isCurrent())addSec(container,'Dalle tue liste',personal.slice(0,18),null,'smart');
   const upcoming=(await getCalendarEntries(36)).slice(0,14).map(e=>({id:e.id,title:e.title,name:e.title,poster_path:e.poster,media_type:e.type,_anime:e.item._anime||0,_reason:e.label}));
+  if(!isCurrent())return;
   if(upcoming.length)addSec(container,'In arrivo per te',upcoming,null,'smart');
 }
-async function addForYouSection(container){
+async function addForYouSection(container,isCurrent=()=>true){
   const items=collectPersonalItems();if(!items.length)return;
   const genreScore={},typeScore={movie:0,tv:0},seen=new Set(items.map(i=>String(i.id)));
   const sample=items.slice(0,8);
   const infos=await Promise.all(sample.map(async item=>{try{const type=item.type==='tv'?'tv':'movie',info=await tmdb(`/${type}/${item.id}`);return{type,info};}catch(e){return null;}}));
+  if(!isCurrent())return;
   infos.filter(Boolean).forEach(({type,info})=>{typeScore[type]+=2;(info.genres||[]).forEach(g=>{genreScore[g.id]=(genreScore[g.id]||0)+1;});});
   const genreId=Object.entries(genreScore).sort((a,b)=>b[1]-a[1])[0]?.[0];if(!genreId)return;
   const genreName=[...MV_GENRES,...TV_GENRES].find(g=>String(g.id)===String(genreId))?.name||'generi simili';
   const type=typeScore.tv>typeScore.movie?'tv':'movie',path=type==='tv'?'/discover/tv':'/discover/movie';
-  try{const d=await tmdb(path,{with_genres:genreId,sort_by:'popularity.desc',watch_region:'IT'});const rec=(d.results||[]).filter(x=>x.poster_path&&!seen.has(String(x.id))).slice(0,18).map(x=>({...x,media_type:type,_reason:`Perche guardi ${genreName}`}));if(rec.length)addSec(container,'Per te',rec,null,'smart');}catch(e){}
+  try{const d=await tmdb(path,{with_genres:genreId,sort_by:'popularity.desc',watch_region:'IT'});if(!isCurrent())return;const rec=(d.results||[]).filter(x=>x.poster_path&&!seen.has(String(x.id))).slice(0,18).map(x=>({...x,media_type:type,_reason:`Perche guardi ${genreName}`}));if(rec.length)addSec(container,'Per te',rec,null,'smart');}catch(e){}
+}
+async function addDiscoverSections(container,sections,delay=HOME_DISCOVER_DELAY,isCurrent=()=>true){
+  for(const sec of sections){
+    if(!isCurrent())return;
+    try{
+      const data=await tmdb(sec.path,sec.params||{});
+      if(!isCurrent()||!document.body.contains(container))return;
+      const items=(data.results||[]).map(x=>({...x,media_type:sec.mediaType||x.media_type||'movie'}));
+      if(items.length){
+        addSec(container,sec.name,items,sec.color||null,sec.tag||'');
+        if(sec.pool)items.forEach(x=>{if(x.poster_path)randomPools[sec.pool].push(x);});
+      }
+    }catch(e){}
+    if(delay)await defer(delay);
+  }
 }
 
 /* HOME */
 async function loadHome(){
   if(loaded.home)return;loaded.home=true;
+  const run=++loadTokens.home,isCurrent=()=>run===loadTokens.home;
   const hw=document.getElementById('hero-wrap'),hs=document.getElementById('home-secs');
   hw.innerHTML='<div class="spin-wrap"><div class="spinner"></div></div>';hs.innerHTML='';
   try{
     const [tr,top10]=await Promise.all([tmdb('/trending/all/week'),tmdb('/trending/all/day',{region:'IT'})]);
+    if(!isCurrent())return;
     heroItems=tr.results.filter(x=>x.backdrop_path);renderHero(0);
     const cw=getAllWatching();if(cw.length)renderCW(hs,cw);
-    await addForYouSection(hs);
-    await addPersonalHomeSections(hs);
+    await addForYouSection(hs,isCurrent);if(!isCurrent())return;
+    await addPersonalHomeSections(hs,isCurrent);if(!isCurrent())return;
     addSecTop10(hs,'Top 10 in Italia oggi',top10.results.slice(0,10));
     addSec(hs,'In tendenza questa settimana',tr.results,null,'');
-    for(const p of PROVIDERS){tmdb('/discover/movie',{with_watch_providers:p.id,watch_region:'IT',sort_by:'popularity.desc'}).then(d=>{if(d.results?.length)addSec(hs,p.name,d.results.map(x=>({...x,media_type:'movie'})),p.c,'');}).catch(()=>{});}
-    for(const g of MV_GENRES.filter(g=>g.id)){tmdb('/discover/movie',{with_genres:g.id,sort_by:'popularity.desc'}).then(d=>{if(d.results?.length)addSec(hs,g.name,d.results.map(x=>({...x,media_type:'movie'})),null,'genre');}).catch(()=>{});}
-  }catch(e){hw.innerHTML='<div class="err">Errore nel caricamento.</div>';}
+    addDiscoverSections(hs,[
+      ...PROVIDERS.map(p=>({name:p.name,path:'/discover/movie',params:{with_watch_providers:p.id,watch_region:'IT',sort_by:'popularity.desc'},mediaType:'movie',color:p.c})),
+      ...MV_GENRES.filter(g=>g.id).map(g=>({name:g.name,path:'/discover/movie',params:{with_genres:g.id,sort_by:'popularity.desc'},mediaType:'movie',tag:'genre'}))
+    ],HOME_DISCOVER_DELAY,isCurrent).catch(()=>{});
+  }catch(e){if(isCurrent())hw.innerHTML='<div class="err">Errore nel caricamento.</div>';}
 }
 
 async function loadCalendario(force=false){
@@ -1052,8 +1076,46 @@ function addSecTop10(container,name,items){
 }
 
 /* SERIE / FILM / ANIME */
-async function loadSerie(){if(loaded.serie)return;loaded.serie=true;buildFilters('filter-serie',TV_GENRES,'serie');const el=document.getElementById('serie-secs');el.innerHTML='<div class="spin-wrap"><div class="spinner"></div></div>';try{const tr=await tmdb('/trending/tv/week');el.innerHTML='';addSec(el,'Serie in tendenza',tr.results.map(x=>({...x,media_type:'tv'})),null,'');tr.results.forEach(x=>{if(x.poster_path)randomPools.serie.push({...x,media_type:'tv'});});for(const p of PROVIDERS){tmdb('/discover/tv',{with_watch_providers:p.id,watch_region:'IT',sort_by:'popularity.desc'}).then(d=>{if(d.results?.length){addSec(el,p.name,d.results.map(x=>({...x,media_type:'tv'})),p.c,'');d.results.forEach(x=>{if(x.poster_path)randomPools.serie.push({...x,media_type:'tv'});});}}).catch(()=>{});}for(const g of TV_GENRES.filter(g=>g.id)){tmdb('/discover/tv',{with_genres:g.id,sort_by:'popularity.desc'}).then(d=>{if(d.results?.length)addSec(el,g.name,d.results.map(x=>({...x,media_type:'tv'})),null,'genre');}).catch(()=>{});};}catch(e){el.innerHTML='<div class="err">Errore.</div>';}}
-async function loadFilm(){if(loaded.film)return;loaded.film=true;buildFilters('filter-film',MV_GENRES,'film');const el=document.getElementById('film-secs');el.innerHTML='<div class="spin-wrap"><div class="spinner"></div></div>';try{const [tr,now,top]=await Promise.all([tmdb('/trending/movie/week'),tmdb('/movie/now_playing',{region:'IT'}),tmdb('/movie/top_rated',{region:'IT'})]);el.innerHTML='';addSec(el,'Film in tendenza',tr.results.map(x=>({...x,media_type:'movie'})),null,'');addSec(el,'Ora al cinema',now.results.map(x=>({...x,media_type:'movie'})),null,'');addSec(el,'I più votati di sempre',top.results.map(x=>({...x,media_type:'movie'})),null,'');tr.results.forEach(x=>{if(x.poster_path)randomPools.film.push({...x,media_type:'movie'});});for(const p of PROVIDERS){tmdb('/discover/movie',{with_watch_providers:p.id,watch_region:'IT',sort_by:'popularity.desc'}).then(d=>{if(d.results?.length){addSec(el,p.name,d.results.map(x=>({...x,media_type:'movie'})),p.c,'');d.results.forEach(x=>{if(x.poster_path)randomPools.film.push({...x,media_type:'movie'});});}}).catch(()=>{});}for(const g of MV_GENRES.filter(g=>g.id)){tmdb('/discover/movie',{with_genres:g.id,sort_by:'popularity.desc'}).then(d=>{if(d.results?.length)addSec(el,g.name,d.results.map(x=>({...x,media_type:'movie'})),null,'genre');}).catch(()=>{});};}catch(e){el.innerHTML='<div class="err">Errore.</div>';}}
+async function loadSerie(){
+  if(loaded.serie)return;loaded.serie=true;
+  const run=++loadTokens.serie,isCurrent=()=>run===loadTokens.serie;
+  buildFilters('filter-serie',TV_GENRES,'serie');
+  const el=document.getElementById('serie-secs');
+  el.innerHTML='<div class="spin-wrap"><div class="spinner"></div></div>';
+  try{
+    const tr=await tmdb('/trending/tv/week');
+    if(!isCurrent())return;
+    el.innerHTML='';
+    const trending=tr.results.map(x=>({...x,media_type:'tv'}));
+    addSec(el,'Serie in tendenza',trending,null,'');
+    trending.forEach(x=>{if(x.poster_path)randomPools.serie.push(x);});
+    addDiscoverSections(el,[
+      ...PROVIDERS.map(p=>({name:p.name,path:'/discover/tv',params:{with_watch_providers:p.id,watch_region:'IT',sort_by:'popularity.desc'},mediaType:'tv',color:p.c,pool:'serie'})),
+      ...TV_GENRES.filter(g=>g.id).map(g=>({name:g.name,path:'/discover/tv',params:{with_genres:g.id,sort_by:'popularity.desc'},mediaType:'tv',tag:'genre'}))
+    ],HOME_DISCOVER_DELAY,isCurrent).catch(()=>{});
+  }catch(e){if(isCurrent())el.innerHTML='<div class="err">Errore.</div>';}
+}
+async function loadFilm(){
+  if(loaded.film)return;loaded.film=true;
+  const run=++loadTokens.film,isCurrent=()=>run===loadTokens.film;
+  buildFilters('filter-film',MV_GENRES,'film');
+  const el=document.getElementById('film-secs');
+  el.innerHTML='<div class="spin-wrap"><div class="spinner"></div></div>';
+  try{
+    const [tr,now,top]=await Promise.all([tmdb('/trending/movie/week'),tmdb('/movie/now_playing',{region:'IT'}),tmdb('/movie/top_rated',{region:'IT'})]);
+    if(!isCurrent())return;
+    el.innerHTML='';
+    const trending=tr.results.map(x=>({...x,media_type:'movie'}));
+    addSec(el,'Film in tendenza',trending,null,'');
+    addSec(el,'Ora al cinema',now.results.map(x=>({...x,media_type:'movie'})),null,'');
+    addSec(el,'I più votati di sempre',top.results.map(x=>({...x,media_type:'movie'})),null,'');
+    trending.forEach(x=>{if(x.poster_path)randomPools.film.push(x);});
+    addDiscoverSections(el,[
+      ...PROVIDERS.map(p=>({name:p.name,path:'/discover/movie',params:{with_watch_providers:p.id,watch_region:'IT',sort_by:'popularity.desc'},mediaType:'movie',color:p.c,pool:'film'})),
+      ...MV_GENRES.filter(g=>g.id).map(g=>({name:g.name,path:'/discover/movie',params:{with_genres:g.id,sort_by:'popularity.desc'},mediaType:'movie',tag:'genre'}))
+    ],HOME_DISCOVER_DELAY,isCurrent).catch(()=>{});
+  }catch(e){if(isCurrent())el.innerHTML='<div class="err">Errore.</div>';}
+}
 async function animeSection(container,title,path,params,type='tv',tag=''){
   try{
     const data=await tmdb(path,{include_adult:false,sort_by:'popularity.desc',...params});
@@ -1083,9 +1145,9 @@ function cardProgressHTML(item,type){
   const pct=prog.secs?Math.min(Math.max(Math.round((prog.secs/est)*100),4),95):0;
   return `<div class="card-progress-badge">📍 ${prog.text}${progressConfidenceLabel(prog)}</div>${pct?`<div class="card-progress-line"><span style="width:${pct}%"></span></div>`:''}`;
 }
-function addSec(container,name,items,color,type){if(!items?.length)return;const sec=document.createElement('div');sec.className='section';const dot=color?`<span class="pip" style="background:${color}"></span>`:'';const gt=type==='genre'?`<span class="gtag">Genere</span>`:type==='smart'?`<span class="gtag">Smart</span>`:'';sec.innerHTML=`<div class="section-head">${dot}<span class="section-name">${name}</span>${gt}</div><div class="row">${items.map(cardHTML).join('')}</div>`;container.appendChild(sec);drag(sec.querySelector('.row'));}
-function cardHTML(item){item=withAnimeFlag(item);const title=item.title||item.name||'',type=item.media_type||'movie',poster=item.poster_path||item.poster||'',score=item.vote_average?'★ '+item.vote_average.toFixed(1):'';const inLib=isInAnyFolder(item.id),anime=item._anime?1:0,rated=getRating(item.id),progress=cardProgressHTML(item,type);const img=poster?`<img src="${IMG}${poster}" alt="${ea(title)}" loading="lazy">`:`<div class="no-poster">${title}</div>`;return `<div class="card" data-id="${item.id}" data-type="${type}" data-title="${ea(title)}" data-poster="${poster}" data-anime="${anime}">${img}${rated?`<div class="card-rated visible">⭐ ${rated}/5</div>`:`<div class="card-rated">⭐ ${rated}/5</div>`}${progress}<div class="card-ov"><div class="card-ov-title">${title}</div><div class="card-ov-sub">${score||'ⓘ Dettagli'}</div></div><div class="card-bm${inLib?' saved':''}" data-bm-id="${item.id}" data-bm-type="${type}" data-bm-title="${ea(title)}" data-bm-poster="${poster}" data-bm-anime="${anime}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></div></div>`;}
-function listCardHTML(item,folderId){const title=item.title||'',type=item.type||'movie',poster=item.poster||'',anime=item.isAnime?1:0,progress=cardProgressHTML(item,type);const img=poster?`<img src="${IMG}${poster}" alt="${ea(title)}" loading="lazy">`:`<div class="no-poster">${ea(title)}</div>`;const score=getRating(item.id);return `<div class="card" data-id="${item.id}" data-type="${type}" data-title="${ea(title)}" data-poster="${poster}" data-anime="${anime}">${img}<button class="card-rm-item" data-rm-from="${folderId}" data-rm-id="${item.id}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>${score?`<div class="card-rated visible">⭐ ${score}/5</div>`:''}${progress}<div class="card-ov"><div class="card-ov-title">${ea(title)}</div><div class="card-ov-sub">ⓘ Dettagli</div></div></div>`;}
+function addSec(container,name,items,color,type){if(!items?.length)return;const visible=items.slice(0,SECTION_CARD_LIMIT);const sec=document.createElement('div');sec.className='section';const dot=color?`<span class="pip" style="background:${color}"></span>`:'';const gt=type==='genre'?`<span class="gtag">Genere</span>`:type==='smart'?`<span class="gtag">Smart</span>`:'';sec.innerHTML=`<div class="section-head">${dot}<span class="section-name">${name}</span>${gt}</div><div class="row">${visible.map(cardHTML).join('')}</div>`;container.appendChild(sec);drag(sec.querySelector('.row'));}
+function cardHTML(item){item=withAnimeFlag(item);const title=item.title||item.name||'',type=item.media_type||'movie',poster=item.poster_path||item.poster||'',score=item.vote_average?'★ '+item.vote_average.toFixed(1):'';const inLib=isInAnyFolder(item.id),anime=item._anime?1:0,rated=getRating(item.id),progress=cardProgressHTML(item,type);const img=poster?`<img src="${IMG}${poster}" alt="${ea(title)}" loading="lazy" decoding="async" fetchpriority="low">`:`<div class="no-poster">${title}</div>`;return `<div class="card" data-id="${item.id}" data-type="${type}" data-title="${ea(title)}" data-poster="${poster}" data-anime="${anime}">${img}${rated?`<div class="card-rated visible">⭐ ${rated}/5</div>`:`<div class="card-rated">⭐ ${rated}/5</div>`}${progress}<div class="card-ov"><div class="card-ov-title">${title}</div><div class="card-ov-sub">${score||'ⓘ Dettagli'}</div></div><div class="card-bm${inLib?' saved':''}" data-bm-id="${item.id}" data-bm-type="${type}" data-bm-title="${ea(title)}" data-bm-poster="${poster}" data-bm-anime="${anime}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></div></div>`;}
+function listCardHTML(item,folderId){const title=item.title||'',type=item.type||'movie',poster=item.poster||'',anime=item.isAnime?1:0,progress=cardProgressHTML(item,type);const img=poster?`<img src="${IMG}${poster}" alt="${ea(title)}" loading="lazy" decoding="async" fetchpriority="low">`:`<div class="no-poster">${ea(title)}</div>`;const score=getRating(item.id);return `<div class="card" data-id="${item.id}" data-type="${type}" data-title="${ea(title)}" data-poster="${poster}" data-anime="${anime}">${img}<button class="card-rm-item" data-rm-from="${folderId}" data-rm-id="${item.id}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>${score?`<div class="card-rated visible">⭐ ${score}/5</div>`:''}${progress}<div class="card-ov"><div class="card-ov-title">${ea(title)}</div><div class="card-ov-sub">ⓘ Dettagli</div></div></div>`;}
 function psCardHTML(p){const known=(p.known_for||[]).map(k=>k.title||k.name).filter(Boolean).slice(0,2).join(', ');const photo=p.profile_path?`<img src="${FACE}${p.profile_path}" class="pscard-photo" loading="lazy" alt="${ea(p.name)}">`:`<div class="pscard-photo pscard-nophoto">👤</div>`;return `<div class="pscard" data-actor-id="${p.id}">${photo}<div class="pscard-name">${ea(p.name)}</div>${known?`<div class="pscard-known">${ea(known)}</div>`:''}</div>`;}
 function starRatingHTML(id){const cur=getRating(id);return `<div class="dm-rating-row"><div class="dm-rating-label">La tua valutazione</div><div class="star-row">${[1,2,3,4,5].map(n=>`<button class="star-btn${n<=cur?' active':''}" data-star="${n}" data-rid="${id}">★</button>`).join('')}</div></div>`;}
 function providerUrl(name,title,fallback){
