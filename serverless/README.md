@@ -78,6 +78,23 @@ wrangler deploy
 streamApiBase: 'https://api.streamgn.it'
 ```
 
+### Deploy da GitHub Actions
+
+Il repository include anche `.github/workflows/deploy-worker.yml`.
+
+1. Su GitHub apri `Settings -> Secrets and variables -> Actions`.
+2. Aggiungi questi secret:
+   - `CLOUDFLARE_API_TOKEN`
+   - `CLOUDFLARE_ACCOUNT_ID`
+3. Fai push su `main` oppure lancia manualmente `Deploy StreamGN Worker`.
+4. Dopo il deploy, copia l'URL del Worker in `assets/remote-config.json`:
+
+```json
+"streamApiBase": "https://streamgn-provider-api.<tuo-subdomain>.workers.dev"
+```
+
+Da quel momento le sezioni Anime e Sport useranno il proxy `/external/anime` e `/external/sport` per restare visibili dentro il sito.
+
 ## Note provider anime
 
 - `STREAMRIP_BASE_URL` controlla la base dell'iframe anime.

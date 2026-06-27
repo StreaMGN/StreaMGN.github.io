@@ -1,0 +1,16 @@
+name = "streamgn-provider-api"
+main = "worker.js"
+compatibility_date = "2026-06-19"
+
+[vars]
+CORS_ORIGIN = "https://streamgn.github.io"
+SPORT_URL = "https://pepperstream.xyz/index.php"
+MOVIE_PROVIDERS = "vixsrc"
+TV_PROVIDERS = "vixsrc"
+ANIME_PROVIDERS = "streamrip"
+SPORT_PROVIDERS = "configured"
+STREAMRIP_BASE_URL = "https://streamrip-website-production.up.railway.app"
+ANILIST_API_BASE = "https://graphql.anilist.co"
+EXTERNAL_ANIME_URL = "https://www.animeunity.so"
+EXTERNAL_SPORT_URL = "https://pepperstream.xyz/index.php"
+EXTERNAL_PROXY_ALLOWED_HOSTS = "animeunity.so,www.animeunity.so,pepperstream.xyz,www.pepperstream.xyz"
