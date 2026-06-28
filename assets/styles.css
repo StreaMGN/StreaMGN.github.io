@@ -2555,3 +2555,136 @@ html[data-theme="light"] :is(.fchip.active,.list-filter-btn.active,.src-btn.acti
     max-height:calc(100dvh - 132px - max(var(--safe-top,0px),12px) - var(--safe-bottom,0px))!important;
   }
 }
+
+/* Player stability fix: controlli scuri, compatti e indipendenti dal glass globale. */
+#player-modal .player-tv-controls{
+  width:100%!important;
+  box-sizing:border-box!important;
+  display:flex;
+  align-items:flex-end!important;
+  gap:12px!important;
+  flex-wrap:wrap!important;
+  padding:12px!important;
+  border-radius:14px!important;
+  background:rgba(12,12,14,.96)!important;
+  border:.5px solid rgba(255,255,255,.16)!important;
+  box-shadow:none!important;
+  backdrop-filter:none!important;
+  -webkit-backdrop-filter:none!important;
+  transform:none!important;
+}
+#player-modal .player-tv-controls::before,
+#player-modal .player-tv-controls::after,
+#player-modal .player-tools::before,
+#player-modal .player-tools::after,
+#player-modal .player-source-state::before,
+#player-modal .player-source-state::after{
+  display:none!important;
+}
+#player-modal .player-ctrl-group{
+  flex:0 1 220px;
+  min-width:180px;
+  max-width:100%;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+#player-modal .player-ctrl-episode{
+  flex-basis:300px;
+}
+#player-modal .ctrl-label{
+  color:rgba(255,255,255,.62)!important;
+  font-size:.66rem!important;
+  letter-spacing:1.2px!important;
+  font-weight:900!important;
+}
+#player-modal .ctrl-hint{
+  color:rgba(255,255,255,.52)!important;
+  font-size:.68rem!important;
+  line-height:1.25!important;
+  margin-top:0!important;
+}
+#player-modal .player-select{
+  width:100%!important;
+  min-width:0!important;
+  min-height:42px!important;
+  display:block!important;
+  -webkit-appearance:none!important;
+  appearance:none!important;
+  box-sizing:border-box!important;
+  padding:10px 14px!important;
+  border-radius:12px!important;
+  border:.5px solid rgba(255,255,255,.2)!important;
+  background:#f6f6f7!important;
+  background-image:none!important;
+  box-shadow:none!important;
+  color:#050505!important;
+  font-size:.9rem!important;
+  font-weight:800!important;
+  line-height:1.2!important;
+  text-align:center!important;
+  text-align-last:center!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+}
+#player-modal .player-select option{
+  background:#f6f6f7!important;
+  color:#050505!important;
+}
+#player-modal .player-tools{
+  width:100%!important;
+  padding:0!important;
+  min-height:0!important;
+  display:flex!important;
+  align-items:center!important;
+  gap:8px!important;
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+  backdrop-filter:none!important;
+  -webkit-backdrop-filter:none!important;
+  transform:none!important;
+}
+#player-modal .player-source-state{
+  display:inline-flex!important;
+  width:auto!important;
+  min-height:28px!important;
+  align-items:center!important;
+  padding:6px 11px!important;
+  border-radius:999px!important;
+  background:rgba(255,255,255,.12)!important;
+  border:.5px solid rgba(255,255,255,.18)!important;
+  box-shadow:none!important;
+  color:rgba(255,255,255,.8)!important;
+  font-size:.72rem!important;
+  font-weight:800!important;
+  backdrop-filter:none!important;
+  -webkit-backdrop-filter:none!important;
+}
+@media(max-width:940px) and (orientation:landscape){
+  #player-modal .player-tv-controls{
+    flex-wrap:nowrap!important;
+    overflow-x:auto!important;
+    padding:10px 12px!important;
+    gap:10px!important;
+  }
+  #player-modal .player-ctrl-group{
+    flex:0 0 220px!important;
+  }
+  #player-modal .player-ctrl-episode{
+    flex-basis:300px!important;
+  }
+  #player-modal .ctrl-hint{
+    white-space:nowrap!important;
+  }
+  #player-modal .player-box{
+    max-height:calc(100dvh - 164px - max(var(--safe-top,0px),12px) - var(--safe-bottom,0px))!important;
+  }
+}
+@media(max-width:560px){
+  #player-modal .player-ctrl-group,
+  #player-modal .player-ctrl-episode{
+    flex:1 1 100%!important;
+  }
+}

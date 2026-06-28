@@ -913,7 +913,7 @@ async function resolveStreamUrl(id,type,season,episode,src,startSecs){
 }
 async function setPlayerFrameSrc(id,type,season,episode,src,startSecs){
   const fr=document.getElementById('vix-frame');if(!fr)return;
-  applySavedPlayerSandbox();
+  clearPlayerFrameSandbox();
   const seq=++playerStreamSeq,fallback=getEmbedUrl(id,type,season,episode,src,startSecs),providers=window.StreamGNProviders,anime=isAnimeSource(src);
   if(anime)setFrameMessage(fr,'Caricamento episodio','Un attimo.');
   else{showIframePlayer(fr);fr.removeAttribute('srcdoc');fr.src=providers?.hasBackend?.()?'about:blank':fallback;}

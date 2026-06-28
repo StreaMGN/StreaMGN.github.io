@@ -53,7 +53,7 @@
   } catch (e) {}
 })();
 </script>
-<link rel="stylesheet" href="assets/styles.css?v=20260628-restore1">
+<link rel="stylesheet" href="assets/styles.css?v=20260628-playerfix1">
 </head>
 <body>
 
@@ -178,9 +178,9 @@
     </div>
     <div id="sc-no-stream" style="display:none"><span>⚠️ Canale non disponibile — prova un altro server</span></div>
     <div class="anime-note" id="anime-note" style="display:none"></div>
-    <div class="tv-controls" id="tv-ctrl">
-      <div class="ctrl-group"><span class="ctrl-label">Stagione</span><select class="gsel" id="s-sel" style="min-width:165px"></select></div>
-      <div class="ctrl-group"><span class="ctrl-label">Episodio</span><select class="gsel" id="e-sel" style="min-width:210px"></select><span class="ctrl-hint">Cambia e il player si aggiorna automaticamente</span></div>
+    <div class="tv-controls player-tv-controls" id="tv-ctrl">
+      <div class="ctrl-group player-ctrl-group"><span class="ctrl-label">Stagione</span><select class="gsel player-select" id="s-sel"></select></div>
+      <div class="ctrl-group player-ctrl-group player-ctrl-episode"><span class="ctrl-label">Episodio</span><select class="gsel player-select" id="e-sel"></select><span class="ctrl-hint">Cambia e il player si aggiorna automaticamente</span></div>
     </div>
     <div class="pm-note-bar" id="pm-note-bar" hidden>
       <div class="pm-note-resume-row" id="pm-note-resume-row" style="display:none">
@@ -311,6 +311,6 @@
 </div>
 <script src="assets/config.js"></script>
 <script src="assets/providers.js"></script>
-<script src="assets/app.js?v=20260628-restore1"></script>
+<script src="assets/app.js?v=20260628-playerfix1"></script>
 </body>
 </html>
