@@ -12,15 +12,12 @@ Frontend GitHub Pages
   -> /play/tv/:id/:season/:episode
   -> /play/anime/:id
   -> /sport/live
-  -> /external/anime?url=https://www.animeunity.so
-  -> /external/sport?url=https://pepperstream.xyz/index.php
 
 Cloudflare Worker
   -> Movie Provider
   -> TV Provider
   -> Anime Provider
   -> Sport Provider
-  -> External site proxy for iframe-safe Anime/Sport pages
 ```
 
 ## Endpoint
@@ -30,8 +27,6 @@ Cloudflare Worker
 - `GET /play/tv/:id/:season/:episode`
 - `GET /play/anime/:id?anilistId=16498&flatEpisode=1`
 - `GET /sport/live`
-- `GET /external/anime?url=https://www.animeunity.so`
-- `GET /external/sport?url=https://pepperstream.xyz/index.php`
 
 Ogni endpoint risponde con:
 
@@ -51,15 +46,11 @@ Configura i provider con variabili Cloudflare:
 - `TV_PROVIDERS=vixsrc`
 - `ANIME_PROVIDERS=streamrip`
 - `SPORT_PROVIDERS=configured`
-- `EXTERNAL_ANIME_URL=https://www.animeunity.so`
-- `EXTERNAL_SPORT_URL=https://pepperstream.xyz/index.php`
-- `EXTERNAL_PROXY_ALLOWED_HOSTS=animeunity.so,www.animeunity.so,pepperstream.xyz,www.pepperstream.xyz`
-
 Gli anime usano solo Streamrip. Il frontend risolve automaticamente l'ID AniList e invia anche `flatEpisode`, perche Streamrip usa una numerazione episodio piatta.
 
-## Sezioni Anime e Sport integrate
+## Sezioni Anime e Sport
 
-AnimeUnity e Pepperstream inviano header anti-iframe. Il frontend quindi usa `/external/anime` e `/external/sport` quando `streamApiBase` punta al Worker: il Worker recupera la pagina esterna, rimuove gli header che bloccano l'iframe e riscrive link e asset per mantenere la navigazione dentro StreaMGN.
+AnimeUnity e Pepperstream non vengono piu caricati dentro StreaMGN. Il frontend mostra un blocco con pulsante `Apri fuori` e legge gli URL da `assets/external-sites.json`.
 
 ## Deploy Cloudflare Workers
 
@@ -93,7 +84,7 @@ Il repository include anche `.github/workflows/deploy-worker.yml`.
 "streamApiBase": "https://streamgn-provider-api.<tuo-subdomain>.workers.dev"
 ```
 
-Da quel momento le sezioni Anime e Sport useranno il proxy `/external/anime` e `/external/sport` per restare visibili dentro il sito.
+Da quel momento il Worker potra essere usato dal player/provider API. Le sezioni Anime e Sport resteranno comunque come collegamenti esterni configurati da `assets/external-sites.json`.
 
 ### Errore workers.dev non registrato
 

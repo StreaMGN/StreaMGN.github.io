@@ -3,13 +3,13 @@
     "url": "https://www.animeunity.so",
     "embedUrl": "https://www.animeunity.so",
     "openUrl": "https://www.animeunity.so",
-    "proxy": true
+    "proxy": false
   },
   "sport": {
     "url": "https://pepperstream.xyz/index.php",
     "embedUrl": "https://pepperstream.xyz/index.php",
     "openUrl": "https://pepperstream.xyz/index.php",
-    "proxy": true
+    "proxy": false
   },
   "updatedAt": "2026-06-27T00:00:00.000Z"
 }
