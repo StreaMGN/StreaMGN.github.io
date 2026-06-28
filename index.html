@@ -53,7 +53,7 @@
   } catch (e) {}
 })();
 </script>
-<link rel="stylesheet" href="assets/styles.css?v=20260628-playerfix1">
+<link rel="stylesheet" href="assets/styles.css?v=20260629-playerstable2">
 </head>
 <body>
 
@@ -179,8 +179,19 @@
     <div id="sc-no-stream" style="display:none"><span>⚠️ Canale non disponibile — prova un altro server</span></div>
     <div class="anime-note" id="anime-note" style="display:none"></div>
     <div class="tv-controls player-tv-controls" id="tv-ctrl">
-      <div class="ctrl-group player-ctrl-group"><span class="ctrl-label">Stagione</span><select class="gsel player-select" id="s-sel"></select></div>
-      <div class="ctrl-group player-ctrl-group player-ctrl-episode"><span class="ctrl-label">Episodio</span><select class="gsel player-select" id="e-sel"></select><span class="ctrl-hint">Cambia e il player si aggiorna automaticamente</span></div>
+      <div class="ctrl-group player-ctrl-group" data-player-picker-wrap="season">
+        <span class="ctrl-label">Stagione</span>
+        <select class="gsel player-select player-native-select" id="s-sel" aria-hidden="true" tabindex="-1"></select>
+        <button class="player-picker-btn" id="s-picker-btn" type="button" data-player-picker="season" aria-haspopup="listbox" aria-expanded="false"><span id="s-picker-label">Stagione</span><span class="player-picker-chev">v</span></button>
+        <div class="player-picker-menu" id="s-picker-menu" role="listbox"></div>
+      </div>
+      <div class="ctrl-group player-ctrl-group player-ctrl-episode" data-player-picker-wrap="episode">
+        <span class="ctrl-label">Episodio</span>
+        <select class="gsel player-select player-native-select" id="e-sel" aria-hidden="true" tabindex="-1"></select>
+        <button class="player-picker-btn" id="e-picker-btn" type="button" data-player-picker="episode" aria-haspopup="listbox" aria-expanded="false"><span id="e-picker-label">Episodio</span><span class="player-picker-chev">v</span></button>
+        <div class="player-picker-menu" id="e-picker-menu" role="listbox"></div>
+        <span class="ctrl-hint">Cambia e il player si aggiorna automaticamente</span>
+      </div>
     </div>
     <div class="pm-note-bar" id="pm-note-bar" hidden>
       <div class="pm-note-resume-row" id="pm-note-resume-row" style="display:none">
@@ -311,6 +322,6 @@
 </div>
 <script src="assets/config.js"></script>
 <script src="assets/providers.js"></script>
-<script src="assets/app.js?v=20260628-playerfix1"></script>
+<script src="assets/app.js?v=20260629-playerstable2"></script>
 </body>
 </html>

@@ -2688,3 +2688,198 @@ html[data-theme="light"] :is(.fchip.active,.list-filter-btn.active,.src-btn.acti
     flex:1 1 100%!important;
   }
 }
+
+/* Player final pass: Safari-safe controls and landscape layout that does not clip. */
+#player-modal.open{
+  display:flex!important;
+  height:100svh!important;
+  height:100dvh!important;
+  max-height:100dvh!important;
+  overflow:hidden!important;
+}
+#player-modal .pm-topbar{
+  width:100%!important;
+  max-width:none!important;
+  box-sizing:border-box!important;
+  flex:0 0 auto!important;
+  align-items:center!important;
+  gap:8px!important;
+  overflow:visible!important;
+  padding:calc(var(--safe-top,env(safe-area-inset-top,0px)) + 9px) calc(12px + var(--safe-right,env(safe-area-inset-right,0px))) 9px calc(12px + var(--safe-left,env(safe-area-inset-left,0px)))!important;
+  min-height:calc(54px + var(--safe-top,env(safe-area-inset-top,0px)))!important;
+}
+#player-modal .pm-title{
+  min-width:0!important;
+  flex:1 1 auto!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  line-height:1.25!important;
+  max-height:none!important;
+}
+#player-modal .pm-actions-row{
+  min-width:0!important;
+  max-width:min(56vw,520px)!important;
+  overflow-x:auto!important;
+  overflow-y:hidden!important;
+  flex-wrap:nowrap!important;
+  justify-content:flex-start!important;
+  scrollbar-width:none!important;
+}
+#player-modal .pm-actions-row::-webkit-scrollbar{display:none!important}
+#player-modal .pm-wrap{
+  flex:1 1 auto!important;
+  min-height:0!important;
+  overflow-y:auto!important;
+  overflow-x:hidden!important;
+  overscroll-behavior:contain!important;
+  padding-bottom:calc(var(--safe-bottom,env(safe-area-inset-bottom,0px)) + 14px)!important;
+}
+#player-modal .player-tv-controls{
+  overflow:visible!important;
+  align-items:stretch!important;
+  background:rgba(12,12,14,.86)!important;
+}
+#player-modal .player-native-select{
+  position:absolute!important;
+  left:-9999px!important;
+  top:auto!important;
+  width:1px!important;
+  height:1px!important;
+  opacity:0!important;
+  pointer-events:none!important;
+}
+#player-modal .player-ctrl-group{
+  position:relative!important;
+  overflow:visible!important;
+}
+#player-modal .player-picker-btn{
+  width:100%!important;
+  min-height:42px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:10px!important;
+  padding:10px 12px 10px 14px!important;
+  border-radius:12px!important;
+  border:.5px solid rgba(255,255,255,.2)!important;
+  background:#f6f6f7!important;
+  color:#050505!important;
+  box-shadow:none!important;
+  appearance:none!important;
+  -webkit-appearance:none!important;
+  font:800 .9rem var(--font)!important;
+  line-height:1.2!important;
+  text-align:left!important;
+  cursor:pointer!important;
+}
+#player-modal .player-picker-btn span:first-child{
+  min-width:0!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+}
+#player-modal .player-picker-btn:disabled{
+  opacity:.58!important;
+  cursor:default!important;
+}
+#player-modal .player-picker-chev{
+  flex:0 0 auto!important;
+  opacity:.64!important;
+  font-size:.8rem!important;
+  line-height:1!important;
+}
+#player-modal .player-picker-menu{
+  display:none!important;
+  position:absolute!important;
+  z-index:80!important;
+  top:calc(100% + 6px)!important;
+  left:0!important;
+  right:0!important;
+  max-height:min(260px,46vh)!important;
+  overflow:auto!important;
+  padding:6px!important;
+  border-radius:14px!important;
+  background:#151518!important;
+  border:.5px solid rgba(255,255,255,.18)!important;
+  box-shadow:0 18px 48px rgba(0,0,0,.45)!important;
+  backdrop-filter:none!important;
+  -webkit-backdrop-filter:none!important;
+}
+#player-modal [data-player-picker-wrap].open .player-picker-menu{
+  display:grid!important;
+  gap:4px!important;
+}
+#player-modal .player-picker-option{
+  width:100%!important;
+  min-height:36px!important;
+  border:0!important;
+  border-radius:10px!important;
+  background:transparent!important;
+  color:rgba(255,255,255,.84)!important;
+  font:750 .82rem var(--font)!important;
+  line-height:1.25!important;
+  text-align:left!important;
+  padding:8px 10px!important;
+  cursor:pointer!important;
+}
+#player-modal .player-picker-option.active,
+#player-modal .player-picker-option:hover{
+  background:#f6f6f7!important;
+  color:#050505!important;
+}
+#player-modal .src-btn.active{
+  background:#f6f6f7!important;
+  color:#050505!important;
+  border-color:#f6f6f7!important;
+  text-shadow:none!important;
+}
+@media(max-width:940px) and (orientation:landscape){
+  #player-modal .pm-topbar{
+    flex-wrap:wrap!important;
+    align-content:center!important;
+    padding-top:calc(max(var(--safe-top,env(safe-area-inset-top,0px)),10px) + 6px)!important;
+    padding-bottom:7px!important;
+    gap:6px 8px!important;
+  }
+  #player-modal .pm-topbar .back-btn,
+  #player-modal #pm-logo{
+    flex:0 0 auto!important;
+  }
+  #player-modal .pm-title{
+    flex:1 1 150px!important;
+    min-width:110px!important;
+    order:0!important;
+  }
+  #player-modal .pm-actions-row{
+    order:2!important;
+    flex:1 0 100%!important;
+    max-width:100%!important;
+    padding-bottom:1px!important;
+  }
+  #player-modal .pm-wrap{
+    gap:8px!important;
+    padding-top:8px!important;
+  }
+  #player-modal .player-tv-controls{
+    flex-wrap:wrap!important;
+    overflow:visible!important;
+    padding:10px!important;
+    gap:8px!important;
+  }
+  #player-modal .player-ctrl-group{
+    flex:1 1 190px!important;
+    min-width:170px!important;
+  }
+  #player-modal .player-ctrl-episode{
+    flex:2 1 260px!important;
+  }
+  #player-modal .ctrl-hint{
+    white-space:normal!important;
+  }
+  #player-modal .player-box{
+    flex:1 1 auto!important;
+    min-height:145px!important;
+    max-height:calc(100dvh - 196px - max(var(--safe-top,env(safe-area-inset-top,0px)),10px) - var(--safe-bottom,env(safe-area-inset-bottom,0px)))!important;
+  }
+}
