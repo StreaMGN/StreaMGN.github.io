@@ -2739,7 +2739,12 @@ html[data-theme="light"] :is(.fchip.active,.list-filter-btn.active,.src-btn.acti
   overflow:visible!important;
   align-items:stretch!important;
   background:rgba(12,12,14,.86)!important;
+  position:relative!important;
+  z-index:90!important;
 }
+#player-modal .pm-note-bar,
+#player-modal .player-tools{position:relative!important;z-index:30!important}
+#player-modal .player-box{position:relative!important;z-index:1!important}
 #player-modal .player-native-select{
   position:absolute!important;
   left:-9999px!important;
@@ -2805,6 +2810,10 @@ html[data-theme="light"] :is(.fchip.active,.list-filter-btn.active,.src-btn.acti
   box-shadow:0 18px 48px rgba(0,0,0,.45)!important;
   backdrop-filter:none!important;
   -webkit-backdrop-filter:none!important;
+}
+#player-modal [data-player-picker-wrap].drop-up .player-picker-menu{
+  top:auto!important;
+  bottom:calc(100% + 6px)!important;
 }
 #player-modal [data-player-picker-wrap].open .player-picker-menu{
   display:grid!important;
@@ -2918,4 +2927,48 @@ html[data-theme="light"] :is(.fchip.active,.list-filter-btn.active,.src-btn.acti
   min-width:max-content!important;
   justify-content:center!important;
   text-align:center!important;
+}
+
+/* Final selector/import fix: native selects stay native, import list scrolls inside the sheet. */
+select.gsel{
+  display:inline-block!important;
+  appearance:auto!important;
+  -webkit-appearance:auto!important;
+  background-image:none!important;
+  min-height:40px!important;
+  line-height:normal!important;
+  text-align:left!important;
+  text-align-last:auto!important;
+  text-wrap:normal!important;
+  overflow-wrap:normal!important;
+  padding:8px 12px!important;
+  box-shadow:none!important;
+}
+select.gsel option{
+  color:CanvasText!important;
+  background:Canvas!important;
+}
+#import-modal.open{
+  overflow:hidden!important;
+}
+#import-modal .imp-box{
+  overflow:hidden!important;
+  display:grid!important;
+  grid-template-rows:auto auto minmax(0,1fr) auto!important;
+}
+#import-modal .imp-folder-list{
+  min-height:140px!important;
+  overflow-y:auto!important;
+  overflow-x:hidden!important;
+  -webkit-overflow-scrolling:touch!important;
+  overscroll-behavior:contain!important;
+  touch-action:pan-y!important;
+  padding-right:4px!important;
+  padding-bottom:10px!important;
+}
+#import-modal .imp-footer{
+  position:static!important;
+  bottom:auto!important;
+  margin:0!important;
+  flex-shrink:0!important;
 }
