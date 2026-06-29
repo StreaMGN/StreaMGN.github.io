@@ -2883,3 +2883,39 @@ html[data-theme="light"] :is(.fchip.active,.list-filter-btn.active,.src-btn.acti
     max-height:calc(100dvh - 196px - max(var(--safe-top,env(safe-area-inset-top,0px)),10px) - var(--safe-bottom,env(safe-area-inset-bottom,0px)))!important;
   }
 }
+
+/* Public polish: desktop nav must stay pinned to the real top edge. */
+@media(min-width:821px) and (pointer:fine){
+  body{
+    padding-top:calc(58px + var(--safe-top,env(safe-area-inset-top,0px)))!important;
+  }
+  nav{
+    position:fixed!important;
+    top:0!important;
+    bottom:auto!important;
+    left:0!important;
+    right:0!important;
+    width:100%!important;
+    min-height:calc(58px + var(--safe-top,env(safe-area-inset-top,0px)))!important;
+    transform:none!important;
+  }
+  main{
+    padding-top:0!important;
+  }
+}
+
+/* Final readability pass: labels and player actions must never compress text. */
+.sp-iframe-url{
+  min-width:0!important;
+  text-align:center!important;
+  text-overflow:ellipsis!important;
+}
+#player-modal .pm-actions-row > .pip-btn,
+#player-modal .pm-actions-row > .src-toggle{
+  flex:0 0 auto!important;
+}
+#player-modal .pip-btn{
+  min-width:max-content!important;
+  justify-content:center!important;
+  text-align:center!important;
+}

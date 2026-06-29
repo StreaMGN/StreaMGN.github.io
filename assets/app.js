@@ -1290,7 +1290,7 @@ async function animeSection(container,title,path,params,type='tv',tag=''){
 async function loadAnime(){
   const sites=await fetchExternalSites(),rawUrl=siteRawUrlFromExternal(sites,'anime',ANIME_UNITY_URL),openUrl=siteOpenUrlFromExternal(sites,'anime',rawUrl),label=document.getElementById('anime-url-label'),open=document.getElementById('anime-open-link'),fallback=document.getElementById('anime-fallback-open');
   loaded.anime=true;
-  if(label)label.textContent=rawUrl;
+  if(label){label.textContent=externalDisplayLabel(rawUrl);label.title=rawUrl;}
   if(open)open.href=openUrl;
   if(fallback)fallback.href=openUrl;
 }
@@ -1747,7 +1747,7 @@ window.addEventListener('beforeunload',saveLeavingState);
 window.addEventListener('pageshow',e=>{
   syncViewportMetrics();
   requestReadableContrast();
-  if(e.persisted)restoreSavedPlayerIfNeeded(120);
+  if(e.persisted)restoreSavedPlayerIfNeeded(120,true);
 },{passive:true});
 document.addEventListener('click',e=>{const a=e.target.closest?.('a[target="_blank"]');if(a)saveLeavingState();},true);
 
@@ -1963,6 +1963,12 @@ function siteOpenUrlFromExternal(sites,kind,fallback){
   const cfg=sites?.[kind]||{};
   return normalizeUrl(cfg.openUrl||cfg.url||cfg.embedUrl||fallback)||fallback;
 }
+function externalDisplayLabel(url){
+  try{
+    const u=new URL(normalizeUrl(url));
+    return u.hostname.replace(/^www\./,'').slice(0,42);
+  }catch(e){return String(url||'').replace(/^https?:\/\//,'').replace(/^www\./,'').slice(0,42);}
+}
 function sportRawUrlFromConfig(cfg,sites){
   return siteRawUrlFromExternal(sites,'sport',normalizeUrl(cfg?.sportUrl||cfg?.sport?.url||SPORT_DEFAULT_URL)||SPORT_DEFAULT_URL);
 }
@@ -1976,7 +1982,7 @@ function renderSportAdmin(url){
 }
 async function loadSport(force=false){
   const [cfg,sites]=await Promise.all([fetchRemoteConfig(force),fetchExternalSites(force)]),rawUrl=sportRawUrlFromConfig(cfg,sites),openUrl=siteOpenUrlFromExternal(sites,'sport',rawUrl),label=document.getElementById('sport-url-label'),open=document.getElementById('sport-open-link'),fallback=document.getElementById('sport-fallback-open');
-  if(label)label.textContent=rawUrl;
+  if(label){label.textContent=externalDisplayLabel(rawUrl);label.title=rawUrl;}
   if(open)open.href=openUrl;
   if(fallback)fallback.href=openUrl;
   renderSportAdmin(rawUrl);
@@ -2015,11 +2021,13 @@ document.addEventListener('keydown',e=>{if(e.target.tagName==='INPUT'||e.target.
 document.getElementById('detail-modal').addEventListener('click',function(e){if(e.target===this)closeDetail();});
 
 loadHome();
-function restoreSavedPlayerIfNeeded(delay=120){
+function restoreSavedPlayerIfNeeded(delay=120,force=false){
   try{
     const saved=getNavState(),recent=Date.now()-(saved.updatedAt||0)<NAV_RESTORE_WINDOW,p=saved.player||{};
     if(!recent||!p.open||!p.id)return;
     if(document.getElementById('player-modal')?.classList.contains('open'))return;
+    const navType=performance.getEntriesByType?.('navigation')?.[0]?.type||'navigate';
+    if(!force&&navType!=='reload'&&navType!=='back_forward')return;
     setTimeout(()=>openPlayer(p.id,p.type||'movie',p.title||'StreaMGN',p.poster||'',p.season||null,p.episode||null,!!p.isAnime),delay);
   }catch(e){}
 }
@@ -2030,9 +2038,7 @@ function restoreInitialRoute(){
     if(page==='novita')page='profilo';
     if(page&&document.querySelector(`.nav-btn[data-page="${page}"]`))document.querySelector(`.nav-btn[data-page="${page}"]`).click();
     if(q.get('actor')){openActor(q.get('actor'));return;}
-    if(q.get('id')){openDetail(q.get('id'),q.get('type')||'movie','',q.get('anime')==='1');return;}
-    const saved=getNavState(),recent=Date.now()-(saved.updatedAt||0)<NAV_RESTORE_WINDOW;
-    if(recent&&RESTORABLE_PAGES.has(saved.page)&&document.querySelector(`.nav-btn[data-page="${saved.page}"]`))document.querySelector(`.nav-btn[data-page="${saved.page}"]`).click();
+    if(q.get('id')){openDetail(q.get('id'),q.get('type')||'movie','',q.get('anime')==='1');restoreSavedPlayerIfNeeded(450);return;}
     restoreSavedPlayerIfNeeded(120);
   }catch(e){}
 }
