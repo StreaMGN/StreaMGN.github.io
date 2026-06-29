@@ -9,7 +9,7 @@ window.STREAMGN_CONFIG = {
     face: 'https://image.tmdb.org/t/p/w185',
     still: 'https://image.tmdb.org/t/p/w300'
   },
-  sportDefaultUrl: 'https://pepperstream.xyz/index.php',
+  sportDefaultUrl: 'https://pepperstream.xyz',
   animeUnityUrl: 'https://www.animeunity.so',
   remoteConfigUrl: 'assets/remote-config.json',
   externalSitesUrl: 'assets/external-sites.json',

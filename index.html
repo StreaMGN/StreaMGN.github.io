@@ -53,7 +53,7 @@
   } catch (e) {}
 })();
 </script>
-<link rel="stylesheet" href="assets/styles.css?v=20260629-public8">
+<link rel="stylesheet" href="assets/styles.css?v=20260629-sport1">
 </head>
 <body>
 
@@ -97,7 +97,7 @@
     <div id="search-logo"></div>
     <div class="search-bar">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input type="text" id="search-input" placeholder="Film, serie, attori…" autocomplete="off"/>
+      <input type="text" id="search-input" placeholder="Film, serie, attori, sport…" autocomplete="off"/>
       <button class="icon-btn" id="btn-search-close"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
   </div>
@@ -113,6 +113,7 @@
         <option value="tv">Serie</option>
         <option value="person">Attori</option>
         <option value="anime">Anime</option>
+        <option value="sport">Sport</option>
       </select>
       <input class="search-filter-input" id="search-year-filter" inputmode="numeric" maxlength="4" placeholder="Anno">
       <select class="gsel" id="search-genre-filter" title="Genere">
@@ -160,9 +161,9 @@
     <div id="pm-logo" style="margin-left:6px"></div>
     <span class="pm-title" id="pm-title"></span>
     <div class="pm-actions-row">
-      <div class="src-toggle" id="src-toggle"></div>
-      <button class="pip-btn" id="btn-src-ok" title="Segna sorgente funzionante">✓ OK</button>
-      <button class="pip-btn" id="btn-src-bad" title="Segna sorgente non funzionante">✕ Cambia</button>
+      <div class="src-toggle player-source-hidden" id="src-toggle" hidden></div>
+      <button class="pip-btn player-source-hidden" id="btn-src-ok" title="Segna sorgente funzionante" hidden></button>
+      <button class="pip-btn player-source-hidden" id="btn-src-bad" title="Segna sorgente non funzionante" hidden></button>
       <button class="pip-btn" id="btn-next-ep" style="display:none">▶ Ep. successivo</button>
       <button class="pip-btn" id="btn-pip">⧉ PiP</button>
       <button class="pm-close-btn" id="btn-player-close"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
@@ -206,13 +207,35 @@
       </div>
     </div>
     <div class="player-tools" id="player-tools">
-      <span class="player-source-state" id="player-source-state">Sorgente non verificata</span>
+      <span class="player-source-state player-source-hidden" id="player-source-state" hidden>Sorgente non verificata</span>
     </div>
     <div class="player-box">
       <iframe id="vix-frame" allow="autoplay; fullscreen; picture-in-picture; encrypted-media; airplay" allowfullscreen playsinline webkit-playsinline referrerpolicy="no-referrer"></iframe>
       <video id="stream-video" controls playsinline webkit-playsinline preload="metadata" style="display:none"></video>
     </div>
   </div>
+</div>
+
+<div id="external-watch-modal">
+  <div class="external-watch-card">
+    <button class="external-watch-close" id="external-watch-close" aria-label="Chiudi"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="external-watch-kicker" id="external-watch-kicker">Visione esterna</div>
+    <div class="external-watch-title" id="external-watch-title">Continua sul sito originale</div>
+    <div class="external-watch-sub" id="external-watch-sub">StreaMGN mostra catalogo, dettagli e liste. La visione si apre fuori dal sito.</div>
+    <div class="external-watch-actions">
+      <a class="gbtn gbtn-white" id="external-watch-open" href="#" target="_blank" rel="noopener">Apri fuori</a>
+      <button class="gbtn" id="external-watch-cancel">Resta qui</button>
+    </div>
+  </div>
+</div>
+
+<div id="sport-detail-modal">
+  <div class="sport-detail-topbar">
+    <button class="back-btn" id="btn-sport-detail-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>Indietro</button>
+    <div id="sport-detail-logo" style="margin-left:6px"></div>
+    <button class="dm-close" id="btn-sport-detail-close"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="sport-detail-body" id="sport-detail-body"></div>
 </div>
 
 <div id="folder-picker">
@@ -256,48 +279,64 @@
 <main>
   <div id="page-home" class="page active"><div id="hero-wrap"></div><div class="sections-wrap" id="home-secs"></div></div>
   <div id="page-sport" class="page">
-    <div class="sp-iframe-bar">
-      <span class="sp-live-pill">Sport live</span>
-      <span class="sp-iframe-url" id="sport-url-label">pepperstream.xyz</span>
-      <button class="sp-iframe-btn" id="btn-sport-refresh">Aggiorna link</button>
-      <a class="sp-iframe-btn" id="sport-open-link" href="https://pepperstream.xyz/index.php" target="_blank" rel="noopener"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Apri fuori</a>
-      <a class="sp-iframe-btn sp-admin-btn" id="sport-admin-link" href="https://github.com/StreaMGN/StreaMGN.github.io/edit/main/assets/external-sites.json" target="_blank" rel="noopener">Admin</a>
-    </div>
-    <div class="sp-admin-panel" id="sport-admin-panel">
-      <input class="sp-admin-input" id="sport-admin-input" placeholder="Nuovo link globale sport">
-      <button class="sp-iframe-btn" id="btn-sport-copy-config">Copia config</button>
-      <span class="sp-admin-help">Modifica assets/external-sites.json su GitHub: il link cambia per tutti.</span>
-    </div>
-    <div id="sport-external-wrap" class="external-open-wrap">
-      <div class="external-open-card">
-        <div class="iframe-fallback-kicker">Apertura esterna</div>
-        <div class="iframe-fallback-title">Sport live si apre fuori da StreaMGN</div>
-        <div class="iframe-fallback-sub">Questa sezione non prova più a caricare siti esterni dentro la pagina. Premi il pulsante e continua direttamente sul sito originale.</div>
-        <div class="iframe-fallback-actions">
-          <a class="sp-iframe-btn iframe-fallback-primary" id="sport-fallback-open" href="https://pepperstream.xyz/index.php" target="_blank" rel="noopener">Apri PepperStream</a>
+    <section class="sport-shell">
+      <div class="sport-hero">
+        <div class="sport-hero-copy">
+          <div class="sport-kicker">Sport</div>
+          <h1>Live, risultati e prossimi eventi</h1>
+          <p>Calcio, tennis, Formula 1 e altri sport in una sezione unica, con dati aggiornati quando disponibili.</p>
+          <div class="sport-hero-actions">
+            <button class="gbtn gbtn-white" id="btn-sport-refresh">Aggiorna</button>
+            <a class="gbtn" id="sport-open-link" href="https://pepperstream.xyz" target="_blank" rel="noopener">Guarda sport</a>
+            <a class="gbtn sp-admin-btn" id="sport-admin-link" href="https://github.com/StreaMGN/StreaMGN.github.io/edit/main/assets/external-sites.json" target="_blank" rel="noopener">Admin</a>
+          </div>
         </div>
+        <div class="sport-live-panel" id="sport-live-panel"></div>
       </div>
-    </div>
+      <div class="sp-admin-panel sport-admin-panel" id="sport-admin-panel">
+        <input class="sp-admin-input" id="sport-admin-input" placeholder="Nuovo link globale sport">
+        <button class="sp-iframe-btn" id="btn-sport-copy-config">Copia config</button>
+        <span class="sp-admin-help">Modifica assets/external-sites.json su GitHub: il link cambia per tutti.</span>
+      </div>
+      <div class="sport-controls">
+        <div class="sport-search-box">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="sport-search-input" type="search" placeholder="Cerca squadre, competizioni, eventi..." autocomplete="off">
+        </div>
+        <select class="gsel" id="sport-status-filter">
+          <option value="all">Tutti</option>
+          <option value="live">Live</option>
+          <option value="upcoming">Prossimi</option>
+          <option value="past">Terminati</option>
+        </select>
+        <select class="gsel" id="sport-competition-filter">
+          <option value="">Competizione</option>
+        </select>
+        <input class="search-filter-input sport-date-filter" id="sport-date-filter" type="date" title="Data">
+      </div>
+      <div class="sport-tabs" id="sport-tabs"></div>
+      <div class="sport-body" id="sport-body"><div class="spin-wrap"><div class="spinner"></div></div></div>
+    </section>
   </div>
   <div id="page-serie" class="page"><div class="pg-header"><span class="pg-title">Serie TV</span><button class="random-btn" data-random="serie">🎲 Scegli per me</button></div><div class="filter-bar" id="filter-serie"></div><div class="sections-wrap" id="serie-secs"></div></div>
   <div id="page-film" class="page"><div class="pg-header"><span class="pg-title">Film</span><button class="random-btn" data-random="film">🎲 Scegli per me</button></div><div class="filter-bar" id="filter-film"></div><div class="sections-wrap" id="film-secs"></div></div>
   <div id="page-anime" class="page">
-    <div class="sp-iframe-bar">
-      <span class="sp-live-pill anime-pill">Anime</span>
-      <span class="sp-iframe-url" id="anime-url-label">animeunity.so</span>
-      <button class="sp-iframe-btn" id="btn-anime-refresh">Aggiorna link</button>
-      <a class="sp-iframe-btn" id="anime-open-link" href="https://www.animeunity.so" target="_blank" rel="noopener"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Apri fuori</a>
-    </div>
-    <div id="anime-external-wrap" class="external-open-wrap">
-      <div class="external-open-card">
-        <div class="iframe-fallback-kicker">Apertura esterna</div>
-        <div class="iframe-fallback-title">AnimeUnity si apre fuori da StreaMGN</div>
-        <div class="iframe-fallback-sub">Questa sezione non usa più iframe o proxy. Il collegamento resta modificabile da GitHub nel file assets/external-sites.json.</div>
-        <div class="iframe-fallback-actions">
-          <a class="sp-iframe-btn iframe-fallback-primary" id="anime-fallback-open" href="https://www.animeunity.so" target="_blank" rel="noopener">Apri AnimeUnity</a>
-        </div>
+    <div class="pg-header anime-page-head">
+      <div>
+        <span class="pg-title">Anime</span>
+        <div class="anime-page-sub">Catalogo anime, cast, episodi e liste. La visione continua sul sito originale.</div>
       </div>
+      <div class="anime-page-actions">
+        <button class="random-btn" data-random="anime">🎲 Scegli per me</button>
+        <button class="gbtn" id="btn-anime-refresh">Aggiorna</button>
+        <a class="gbtn" id="anime-open-link" href="https://www.animeunity.so" target="_blank" rel="noopener">AnimeUnity</a>
+      </div>
+      <span class="sp-iframe-url anime-url-hidden" id="anime-url-label">animeunity.so</span>
+      <a class="sp-iframe-btn anime-url-hidden" id="anime-fallback-open" href="https://www.animeunity.so" target="_blank" rel="noopener">Apri AnimeUnity</a>
     </div>
+    <div class="anime-watch-note">Quando scegli Guarda o un episodio, StreaMGN apre un passaggio chiaro verso AnimeUnity: niente iframe dentro al sito.</div>
+    <div class="filter-bar" id="filter-anime"></div>
+    <div class="sections-wrap" id="anime-secs"></div>
   </div>
   <div id="page-calendario" class="page"><div class="pg-header"><span class="pg-title">Calendario</span><button class="gbtn" id="btn-calendar-refresh">Aggiorna</button></div><div class="calendar-wrap" id="calendar-body"><div class="spin-wrap"><div class="spinner"></div></div></div></div>
   <div id="page-profilo" class="page"><div class="profile-wrap" id="profile-wrap"><div class="spin-wrap"><div class="spinner"></div></div></div></div>
@@ -322,6 +361,7 @@
 </div>
 <script src="assets/config.js"></script>
 <script src="assets/providers.js"></script>
-<script src="assets/app.js?v=20260629-public8"></script>
+<script src="assets/sport-data.js?v=20260629-sport1"></script>
+<script src="assets/app.js?v=20260629-sport1"></script>
 </body>
 </html>
