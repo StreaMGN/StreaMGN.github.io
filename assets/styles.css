@@ -2972,3 +2972,60 @@ select.gsel option{
   margin:0!important;
   flex-shrink:0!important;
 }
+
+/* Final lists/player pass. */
+#liste-body .smart-liste-group{
+  display:none!important;
+}
+#liste-body .liste-row{
+  scroll-snap-type:x proximity!important;
+  scroll-padding-left:0!important;
+  scroll-behavior:auto!important;
+}
+#liste-body .liste-row > .plus-card{
+  order:-1!important;
+  scroll-snap-align:start!important;
+  scroll-margin-left:0!important;
+}
+html[data-theme="light"] #player-modal .pm-topbar{
+  --tx:#050505;
+  --tx2:rgba(0,0,0,.72);
+  --tx3:rgba(0,0,0,.48);
+  color:#050505!important;
+  background:rgba(255,255,255,.86)!important;
+  border-color:rgba(0,0,0,.12)!important;
+}
+html[data-theme="light"] #player-modal .pm-topbar :is(.back-btn,.logo-text,.pm-title,.src-btn,.pip-btn,.pm-close-btn){
+  color:#050505!important;
+  text-shadow:none!important;
+}
+html[data-theme="light"] #player-modal .pm-topbar :is(.src-toggle,.pip-btn,.pm-close-btn){
+  background:rgba(0,0,0,.06)!important;
+  border-color:rgba(0,0,0,.14)!important;
+}
+html[data-theme="light"] #player-modal .pm-topbar .src-btn.active{
+  background:rgba(0,0,0,.12)!important;
+  border-color:rgba(0,0,0,.18)!important;
+  color:#050505!important;
+}
+html[data-theme="dark"] #player-modal .pm-topbar{
+  --tx:#fff;
+  --tx2:rgba(255,255,255,.72);
+  --tx3:rgba(255,255,255,.48);
+  color:#fff!important;
+  background:rgba(0,0,0,.86)!important;
+  border-color:rgba(255,255,255,.14)!important;
+}
+html[data-theme="dark"] #player-modal .pm-topbar :is(.back-btn,.logo-text,.pm-title,.src-btn,.pip-btn,.pm-close-btn){
+  color:#fff!important;
+  text-shadow:none!important;
+}
+html[data-theme="dark"] #player-modal .pm-topbar :is(.src-toggle,.pip-btn,.pm-close-btn){
+  background:rgba(255,255,255,.1)!important;
+  border-color:rgba(255,255,255,.16)!important;
+}
+html[data-theme="dark"] #player-modal .pm-topbar .src-btn.active{
+  background:rgba(255,255,255,.16)!important;
+  border-color:rgba(255,255,255,.24)!important;
+  color:#fff!important;
+}
