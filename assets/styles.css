@@ -3882,3 +3882,64 @@ html[data-theme="light"] .sport-badge.past{background:rgba(0,0,0,.06)}
     text-overflow:ellipsis!important;
   }
 }
+
+/* Final mobile fixes: native pickers, film-safe player controls, scrollable genre rows. */
+#player-modal #tv-ctrl[hidden],
+#player-modal #tv-ctrl.is-hidden{
+  display:none!important;
+}
+#player-modal #tv-ctrl.is-active{
+  display:flex!important;
+}
+.filter-bar,
+.dm-genres{
+  display:flex!important;
+  flex-wrap:nowrap!important;
+  overflow-x:auto!important;
+  overflow-y:hidden!important;
+  gap:7px;
+  max-width:100%;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+  overscroll-behavior-x:contain;
+}
+.filter-bar::-webkit-scrollbar,
+.dm-genres::-webkit-scrollbar{display:none!important}
+.filter-bar .fchip,
+.dm-genres .genre-pill{
+  flex:0 0 auto!important;
+  max-width:none!important;
+  width:auto!important;
+  white-space:nowrap!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+}
+@media(max-width:760px),(pointer:coarse){
+  #player-modal #tv-ctrl.is-active{
+    display:grid!important;
+  }
+  #player-modal .player-native-select{
+    position:static!important;
+    left:auto!important;
+    top:auto!important;
+    display:block!important;
+    width:100%!important;
+    height:auto!important;
+    min-height:46px!important;
+    opacity:1!important;
+    pointer-events:auto!important;
+    -webkit-appearance:menulist!important;
+    appearance:auto!important;
+    padding:11px 40px 11px 12px!important;
+    border-radius:13px!important;
+    background:#f7f7f8!important;
+    color:#050505!important;
+    border:.5px solid rgba(255,255,255,.24)!important;
+    text-align:left!important;
+    text-align-last:left!important;
+  }
+  #player-modal .player-picker-btn,
+  #player-modal .player-picker-menu{
+    display:none!important;
+  }
+}
