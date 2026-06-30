@@ -3693,3 +3693,192 @@ html[data-theme="light"] .sport-badge.past{background:rgba(0,0,0,.06)}
   .sport-detail-teams{grid-template-columns:1fr;justify-items:center}
   .external-watch-actions .gbtn{flex:1 1 100%;justify-content:center}
 }
+
+/* Mobile vertical stability: no clipped player controls, no cramped labels. */
+@media(max-width:760px) and (orientation:portrait){
+  #player-modal.open{
+    display:flex!important;
+    flex-direction:column!important;
+    height:100svh!important;
+    height:100dvh!important;
+    overflow:hidden!important;
+  }
+  #player-modal .pm-topbar{
+    display:grid!important;
+    grid-template-columns:auto minmax(0,1fr)!important;
+    grid-template-areas:
+      "back logo"
+      "title title"
+      "actions actions"!important;
+    align-items:center!important;
+    gap:8px!important;
+    width:100%!important;
+    max-width:none!important;
+    min-height:auto!important;
+    padding:calc(var(--safe-top,env(safe-area-inset-top,0px)) + 10px) calc(12px + var(--safe-right,env(safe-area-inset-right,0px))) 10px calc(12px + var(--safe-left,env(safe-area-inset-left,0px)))!important;
+    overflow:visible!important;
+  }
+  #player-modal #btn-player-back{
+    grid-area:back!important;
+    min-width:0!important;
+    white-space:nowrap!important;
+  }
+  #player-modal #pm-logo{
+    grid-area:logo!important;
+    min-width:0!important;
+  }
+  #player-modal #pm-logo .logo-text{
+    max-width:46vw!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+    display:block!important;
+  }
+  #player-modal .pm-title{
+    grid-area:title!important;
+    width:100%!important;
+    min-width:0!important;
+    max-height:none!important;
+    white-space:normal!important;
+    overflow:hidden!important;
+    text-overflow:clip!important;
+    display:-webkit-box!important;
+    -webkit-line-clamp:2!important;
+    -webkit-box-orient:vertical!important;
+    font-size:.92rem!important;
+    line-height:1.25!important;
+    order:0!important;
+  }
+  #player-modal .pm-actions-row{
+    grid-area:actions!important;
+    width:100%!important;
+    max-width:none!important;
+    min-width:0!important;
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) auto auto!important;
+    gap:8px!important;
+    align-items:center!important;
+    overflow:visible!important;
+    padding:0!important;
+  }
+  #player-modal .pm-actions-row .player-source-hidden{
+    display:none!important;
+  }
+  #player-modal #btn-next-ep{
+    min-width:0!important;
+    width:100%!important;
+    max-width:100%!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+  }
+  #player-modal #btn-pip,
+  #player-modal .pm-close-btn{
+    width:auto!important;
+    min-width:42px!important;
+    min-height:40px!important;
+    padding:0 12px!important;
+    flex:0 0 auto!important;
+  }
+  #player-modal .pm-close-btn{
+    width:42px!important;
+    padding:0!important;
+    display:inline-flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+  }
+  #player-modal .pm-wrap{
+    flex:1 1 auto!important;
+    min-height:0!important;
+    width:100%!important;
+    max-width:none!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    gap:10px!important;
+    padding:10px calc(10px + var(--safe-right,env(safe-area-inset-right,0px))) calc(var(--safe-bottom,env(safe-area-inset-bottom,0px)) + 12px) calc(10px + var(--safe-left,env(safe-area-inset-left,0px)))!important;
+  }
+  #player-modal .player-tv-controls{
+    display:grid!important;
+    grid-template-columns:1fr!important;
+    gap:10px!important;
+    width:100%!important;
+    margin:0!important;
+    padding:12px!important;
+    overflow:visible!important;
+    position:relative!important;
+    z-index:180!important;
+    border-radius:16px!important;
+  }
+  #player-modal .player-ctrl-group,
+  #player-modal .player-ctrl-episode{
+    width:100%!important;
+    min-width:0!important;
+    max-width:100%!important;
+    flex:1 1 auto!important;
+  }
+  #player-modal .player-picker-btn{
+    min-height:44px!important;
+    font-size:.86rem!important;
+  }
+  #player-modal .player-picker-menu{
+    z-index:700!important;
+    max-height:min(238px,38svh)!important;
+  }
+  #player-modal .ctrl-hint{
+    white-space:normal!important;
+    overflow-wrap:anywhere!important;
+  }
+  #player-modal .pm-note-bar,
+  #player-modal .player-tools{
+    width:100%!important;
+    max-width:100%!important;
+  }
+  #player-modal .player-box{
+    width:100%!important;
+    min-height:210px!important;
+    max-height:calc(100dvh - 330px - var(--safe-top,env(safe-area-inset-top,0px)) - var(--safe-bottom,env(safe-area-inset-bottom,0px)))!important;
+    aspect-ratio:16/9!important;
+    flex:1 1 auto!important;
+  }
+}
+
+@media(max-width:760px){
+  :where(.gbtn,.pip-btn,.sp-iframe-btn,.sport-tab,.sport-mini-card,.calendar-add,.fp-cat-btn,.fp-custom-btn,.imp-dest-btn,.exp-ok-btn,.imp-ok-btn,.confirm-ok,.confirm-cancel){
+    white-space:normal!important;
+    line-height:1.2!important;
+    text-align:center!important;
+    overflow-wrap:anywhere!important;
+  }
+  :where(.pg-title,.section-name,.sport-event-card h3,.calendar-title,.dm-title,.external-watch-title,.sport-detail-hero h1,.profile-hero h1,.folder-card-name,.imp-row-name){
+    overflow-wrap:anywhere!important;
+    hyphens:auto;
+  }
+  .section-head{
+    gap:8px!important;
+    align-items:flex-start!important;
+  }
+  .section-name{
+    min-width:0!important;
+    line-height:1.18!important;
+  }
+  .gtag{
+    flex:0 0 auto!important;
+  }
+  .card-ov-title{
+    line-height:1.18!important;
+    -webkit-line-clamp:2!important;
+  }
+  .card-ov-sub{
+    line-height:1.2!important;
+  }
+  .sport-event-foot,
+  .sport-event-top{
+    align-items:flex-start!important;
+  }
+  .sport-event-foot span,
+  .sport-event-date{
+    min-width:0!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+  }
+}

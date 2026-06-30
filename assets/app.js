@@ -1571,9 +1571,17 @@ function closePlayerPickers(except=''){
   ['season','episode'].forEach(kind=>{
     if(kind===except)return;
     const p=playerPickerParts(kind);
-    p.wrap?.classList.remove('open');
+    p.wrap?.classList.remove('open','drop-up');
     p.btn?.setAttribute('aria-expanded','false');
   });
+}
+function positionPlayerPicker(kind){
+  const p=playerPickerParts(kind);
+  if(!p.wrap||!p.menu)return;
+  const rect=p.wrap.getBoundingClientRect();
+  const roomBelow=(window.innerHeight||document.documentElement.clientHeight)-rect.bottom;
+  const menuH=Math.min(260,Math.max(160,p.menu.scrollHeight||220));
+  p.wrap.classList.toggle('drop-up',roomBelow<menuH+18&&rect.top>menuH);
 }
 function syncPlayerPicker(kind){
   const p=playerPickerParts(kind);
@@ -1610,6 +1618,7 @@ document.addEventListener('click',e=>{
     const opening=!p.wrap?.classList.contains('open');
     closePlayerPickers(opening?kind:'');
     p.wrap?.classList.toggle('open',opening);
+    if(opening)requestAnimationFrame(()=>positionPlayerPicker(kind));
     p.btn?.setAttribute('aria-expanded',opening?'true':'false');
     return;
   }
@@ -1799,8 +1808,12 @@ window.addEventListener('beforeunload',saveLeavingState);
 window.addEventListener('pageshow',e=>{
   syncViewportMetrics();
   requestReadableContrast();
-  if(e.persisted)restoreSavedPlayerIfNeeded(120,true);
+  if(e.persisted){
+    restoreSavedPageIfNeeded(true);
+    restoreSavedPlayerIfNeeded(220,true);
+  }
 },{passive:true});
+window.addEventListener('orientationchange',()=>saveCurrentNavState({orientationAt:Date.now()}),{passive:true});
 document.addEventListener('click',e=>{const a=e.target.closest?.('a[target="_blank"]');if(a)saveLeavingState();},true);
 
 /* FOLDER PICKER */
@@ -1979,7 +1992,7 @@ window.addEventListener('scroll',()=>stBtn.classList.toggle('visible',window.scr
 stBtn.addEventListener('click',()=>window.scrollTo({top:0,behavior:'smooth'}));
 
 /* NAV */
-function activatePage(pg){
+function activatePage(pg,opts={}){
   const page=document.getElementById('page-'+pg);
   if(!page)return;
   closeContentLayers();
@@ -1987,7 +2000,8 @@ function activatePage(pg){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   page.classList.add('active');
   document.querySelectorAll('.nav-btn').forEach(x=>x.classList.toggle('active',x.dataset.page===pg));
-  writeNavState({page:pg,player:{...(getNavState().player||{}),open:false}});
+  const prevPlayer=getNavState().player||{};
+  writeNavState({page:pg,player:opts.preservePlayer?prevPlayer:{...prevPlayer,open:false}});
   if(pg==='sport')loadSport();
   if(pg==='serie'&&!loaded.serie)loadSerie();
   if(pg==='film'&&!loaded.film)loadFilm();
@@ -2353,6 +2367,19 @@ function restoreSavedPlayerIfNeeded(delay=120,force=false){
     setTimeout(()=>openPlayer(p.id,p.type||'movie',p.title||'StreaMGN',p.poster||'',p.season||null,p.episode||null,!!p.isAnime),delay);
   }catch(e){}
 }
+function restoreSavedPageIfNeeded(force=false){
+  try{
+    const saved=getNavState(),page=saved.page||'home',navType=performance.getEntriesByType?.('navigation')?.[0]?.type||'navigate';
+    const recent=Date.now()-(saved.updatedAt||0)<NAV_RESTORE_WINDOW;
+    const leavingRecent=Date.now()-(saved.leavingAt||0)<NAV_RESTORE_WINDOW;
+    const playerOpen=!!saved.player?.open;
+    if(!RESTORABLE_PAGES.has(page)||!recent)return false;
+    if(!force&&navType==='navigate'&&!leavingRecent&&!playerOpen)return false;
+    if(activePageName()===page)return true;
+    activatePage(page,{preservePlayer:true});
+    return true;
+  }catch(e){return false;}
+}
 function restoreInitialRoute(){
   try{
     const q=new URLSearchParams(location.search);
@@ -2361,7 +2388,8 @@ function restoreInitialRoute(){
     if(page&&document.querySelector(`.nav-btn[data-page="${page}"]`))document.querySelector(`.nav-btn[data-page="${page}"]`).click();
     if(q.get('actor')){openActor(q.get('actor'));return;}
     if(q.get('id')){openDetail(q.get('id'),q.get('type')||'movie','',q.get('anime')==='1');restoreSavedPlayerIfNeeded(450);return;}
-    restoreSavedPlayerIfNeeded(120);
+    const restored=restoreSavedPageIfNeeded();
+    restoreSavedPlayerIfNeeded(restored?420:120);
   }catch(e){}
 }
 setTimeout(restoreInitialRoute,120);
