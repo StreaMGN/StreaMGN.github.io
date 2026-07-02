@@ -45,6 +45,7 @@ const NAV_STATE_KEY='svx_nav_state';
 const PLAYER_RESUME_KEY='svx_player_resume';
 const PLAYER_ROUTE_FLAG='sgnPlayer';
 const NAV_RESTORE_WINDOW=30*60*1000;
+const PLAYER_IFRAME_SANDBOX='allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation allow-modals';
 const RESTORABLE_PAGES=new Set(['home','film','serie','anime','sport','calendario','liste','profilo']);
 const storageMemory={};
 let idbDb=null,idbHydrated=false;
@@ -216,11 +217,17 @@ function writePlayerRoute(snapshot){
     if(p.isAnime)params.set('anime','1');
     if(p.src)params.set('src',p.src);
     params.set('page',p.page||activePageName());
-    params.set('ts',String(Date.now()));
+    const updatedAt=Date.now();
     const url=new URL(location.href);
-    url.hash=params.toString();
+    const nextHash=params.toString();
     const state=history.state&&typeof history.state==='object'?history.state:{};
-    history.replaceState({...state,streamgnPlayer:{...p,updatedAt:Date.now()}},'',url);
+    const nextState={...state,streamgnPlayer:{...p,updatedAt}};
+    if((location.hash?location.hash.slice(1):'')===nextHash){
+      history.replaceState(nextState,'',location.href);
+      return;
+    }
+    url.hash=nextHash;
+    history.replaceState(nextState,'',url);
   }catch(e){}
 }
 function clearPlayerRoute(){
@@ -941,6 +948,7 @@ function stopNativeVideo(clear=true){
   video.style.display='none';
 }
 function showIframePlayer(frame){
+  applyPlayerFrameSandbox(frame);
   const video=document.getElementById('stream-video');
   if(video){stopNativeVideo(true);}
   frame.style.display='block';
@@ -960,6 +968,7 @@ function setNativeVideoSrc(url,startSecs=0){
   return true;
 }
 function setFrameMessage(frame,title,body,actionUrl=''){
+  applyPlayerFrameSandbox(frame);
   stopNativeVideo(true);
   frame.style.display='block';
   const link=actionUrl?`<a href="${ea(actionUrl)}" target="_blank" rel="noopener" style="display:inline-flex;margin-top:18px;padding:10px 14px;border-radius:999px;background:#fff;color:#000;text-decoration:none;font:700 13px -apple-system,BlinkMacSystemFont,sans-serif">Apri ricerca</a>`:'';
@@ -1025,7 +1034,7 @@ async function resolveStreamUrl(id,type,season,episode,src,startSecs){
 }
 async function setPlayerFrameSrc(id,type,season,episode,src,startSecs){
   const fr=document.getElementById('vix-frame');if(!fr)return;
-  clearPlayerFrameSandbox();
+  preparePlayerFrameSandbox();
   const seq=++playerStreamSeq,fallback=getEmbedUrl(id,type,season,episode,src,startSecs),providers=window.StreamGNProviders,anime=isAnimeSource(src);
   if(anime)setFrameMessage(fr,'Caricamento episodio','Un attimo.');
   else{showIframePlayer(fr);fr.removeAttribute('srcdoc');fr.src=providers?.hasBackend?.()?'about:blank':fallback;}
@@ -1740,9 +1749,13 @@ document.addEventListener('keydown',e=>{
   if(e.key!=='Escape')return;
   closePlayerPickers();
 });
-function clearPlayerFrameSandbox(){document.getElementById('vix-frame')?.removeAttribute('sandbox');}
+function applyPlayerFrameSandbox(frame=document.getElementById('vix-frame')){
+  if(!frame)return;
+  frame.setAttribute('sandbox',PLAYER_IFRAME_SANDBOX);
+}
+function preparePlayerFrameSandbox(){applyPlayerFrameSandbox();}
 function buildSrcToggle(){const toggle=document.getElementById('src-toggle');if(toggle)toggle.innerHTML='';updateSourceState();}
-function reloadPlayer(saveFirst=true){if(saveFirst)requestPlayerRealProgress();clearTimeout(playerSourceHealthTimer);const tc=document.getElementById('tv-ctrl');const s=document.getElementById('s-sel').value||1,ep=document.getElementById('e-sel').value||1;clearPlayerFrameSandbox();if(tc.style.display!=='none'&&currentTvId){const prog=getProgress(currentTvId,'tv',s,ep);setPlayerFrameSrc(currentTvId,'tv',s,ep,currentSrc,prog?prog.secs:0);resetPlayerAutoClock();}else if(currentTvId){const prog=getProgress(currentTvId,'movie',null,null);setPlayerFrameSrc(currentTvId,'movie',null,null,currentSrc,prog?prog.secs:0);resetPlayerAutoClock();}updateSourceState();}
+function reloadPlayer(saveFirst=true){if(saveFirst)requestPlayerRealProgress();clearTimeout(playerSourceHealthTimer);const tc=document.getElementById('tv-ctrl');const s=document.getElementById('s-sel').value||1,ep=document.getElementById('e-sel').value||1;preparePlayerFrameSandbox();if(tc.style.display!=='none'&&currentTvId){const prog=getProgress(currentTvId,'tv',s,ep);setPlayerFrameSrc(currentTvId,'tv',s,ep,currentSrc,prog?prog.secs:0);resetPlayerAutoClock();}else if(currentTvId){const prog=getProgress(currentTvId,'movie',null,null);setPlayerFrameSrc(currentTvId,'movie',null,null,currentSrc,prog?prog.secs:0);resetPlayerAutoClock();}updateSourceState();}
 function updateDeviceMediaSession(title,type,poster,season,episode){
   if(!('mediaSession' in navigator)||typeof MediaMetadata==='undefined')return;
   try{
@@ -1783,7 +1796,7 @@ function loadSelectedTvEpisode(s,ep){
   buildSrcToggle(currentIsAnime);
   refreshNoteBar(currentTvId,'tv',s,ep);
   const prog=getProgress(currentTvId,'tv',s,ep);
-  clearPlayerFrameSandbox();
+  preparePlayerFrameSandbox();
   setPlayerFrameSrc(currentTvId,'tv',s,ep,currentSrc,prog?prog.secs:0);
   resetPlayerAutoClock();
   saveWatching(currentTvId,'tv',playerSessionTitle||document.getElementById('pm-title').textContent,playerSessionPoster,s,ep);
@@ -1815,8 +1828,8 @@ async function openPlayer(id,type,title,poster,season,episode,isAnime){
   }
   currentIsAnime=resolvedAnime;currentSrc=getPreferredSource(id,type,initialS,initialE,resolvedAnime,resolvedAnime?'streamrip':'vixsrc');currentTvId=String(id);document.getElementById('pm-title').textContent=title;document.getElementById('anime-note').style.display='none';buildSrcToggle(resolvedAnime);autoAddToWatching({id:String(id),type,title,poster:poster||'',isAnime:resolvedAnime});
   playerProgId=String(id);playerProgType=type;playerProgSeason=type==='tv'?Number(initialS):null;playerProgEpisode=type==='tv'?Number(initialE):null;playerNoteSavedThisSession=true;playerSessionTitle=title;playerSessionPoster=poster||'';playerSessionIsAnime=resolvedAnime;playerSessionAnimeTitles=resolvedAnime?uniqueTextList([title,...(currentDetailId===String(id)?currentDetailAnimeTitles:[])]):[];playerSessionSeasons=[];playerLastAutoSecs=0;playerLastAutoSaveAt=0;stopPlayerAutoSave(false);hideReminderOverlay();document.getElementById('pm-note-bar').classList.remove('highlight');updateDeviceMediaSession(title,type,poster,season,episode);
-  if(type==='tv'){setPlayerTvControlsVisible(true);const sSel=document.getElementById('s-sel'),eSel=document.getElementById('e-sel');sSel.innerHTML='<option>Caricamento...</option>';eSel.innerHTML='<option>Caricamento...</option>';syncPlayerPickers();const playerModal=document.getElementById('player-modal');playerModal.classList.add('open');resetPanelScroll(playerModal);lockBodyScroll();const lastS=initialS,lastE=initialE;try{const show=await tmdb(`/tv/${id}`);if(resolvedAnime)playerSessionAnimeTitles=uniqueTextList([...playerSessionAnimeTitles,...animeTitleCandidates(show,title)]);const seasons=(show.seasons||[]).filter(s=>s.season_number>0);if(!seasons.length)seasons.push({season_number:1,episode_count:10,name:'Stagione 1'});playerSessionSeasons=seasons;sSel.innerHTML=seasons.map(s=>`<option value="${s.season_number}">S${s.season_number} - ${s.name||'Stagione '+s.season_number} (${s.episode_count||'?'} ep.)</option>`).join('');sSel.value=String(lastS);syncPlayerPickers();await loadEpisodesForPlayer(id,sSel.value,lastE);}catch(e){sSel.innerHTML='<option value="1">Stagione 1</option>';eSel.innerHTML='<option value="1">Episodio 1</option>';syncPlayerPickers();}const s=sSel.value||1,ep=document.getElementById('e-sel').value||1;playerProgSeason=Number(s);playerProgEpisode=Number(ep);syncPlayerPickers();currentSrc=getPreferredSource(id,type,s,ep,resolvedAnime,currentSrc);buildSrcToggle(resolvedAnime);refreshNoteBar(id,type,s,ep);const prog=getProgress(id,type,s,ep);clearPlayerFrameSandbox();setPlayerFrameSrc(id,type,s,ep,currentSrc,prog?prog.secs:0);startPlayerAutoSave(prog?prog.secs:0);saveWatching(id,type,title,poster,s,ep);updateNextEpisodeButton();updateSourceState();}
-  else{setPlayerTvControlsVisible(false);playerProgSeason=null;playerProgEpisode=null;refreshNoteBar(id,type,null,null);const prog=getProgress(id,type,null,null);clearPlayerFrameSandbox();setPlayerFrameSrc(id,type,null,null,currentSrc,prog?prog.secs:0);startPlayerAutoSave(prog?prog.secs:0);const playerModal=document.getElementById('player-modal');playerModal.classList.add('open');resetPanelScroll(playerModal);lockBodyScroll();saveWatching(id,type,title,poster,null,null);updateNextEpisodeButton();updateSourceState();}
+  if(type==='tv'){setPlayerTvControlsVisible(true);const sSel=document.getElementById('s-sel'),eSel=document.getElementById('e-sel');sSel.innerHTML='<option>Caricamento...</option>';eSel.innerHTML='<option>Caricamento...</option>';syncPlayerPickers();const playerModal=document.getElementById('player-modal');playerModal.classList.add('open');resetPanelScroll(playerModal);lockBodyScroll();const lastS=initialS,lastE=initialE;try{const show=await tmdb(`/tv/${id}`);if(resolvedAnime)playerSessionAnimeTitles=uniqueTextList([...playerSessionAnimeTitles,...animeTitleCandidates(show,title)]);const seasons=(show.seasons||[]).filter(s=>s.season_number>0);if(!seasons.length)seasons.push({season_number:1,episode_count:10,name:'Stagione 1'});playerSessionSeasons=seasons;sSel.innerHTML=seasons.map(s=>`<option value="${s.season_number}">S${s.season_number} - ${s.name||'Stagione '+s.season_number} (${s.episode_count||'?'} ep.)</option>`).join('');sSel.value=String(lastS);syncPlayerPickers();await loadEpisodesForPlayer(id,sSel.value,lastE);}catch(e){sSel.innerHTML='<option value="1">Stagione 1</option>';eSel.innerHTML='<option value="1">Episodio 1</option>';syncPlayerPickers();}const s=sSel.value||1,ep=document.getElementById('e-sel').value||1;playerProgSeason=Number(s);playerProgEpisode=Number(ep);syncPlayerPickers();currentSrc=getPreferredSource(id,type,s,ep,resolvedAnime,currentSrc);buildSrcToggle(resolvedAnime);refreshNoteBar(id,type,s,ep);const prog=getProgress(id,type,s,ep);preparePlayerFrameSandbox();setPlayerFrameSrc(id,type,s,ep,currentSrc,prog?prog.secs:0);startPlayerAutoSave(prog?prog.secs:0);saveWatching(id,type,title,poster,s,ep);updateNextEpisodeButton();updateSourceState();}
+  else{setPlayerTvControlsVisible(false);playerProgSeason=null;playerProgEpisode=null;refreshNoteBar(id,type,null,null);const prog=getProgress(id,type,null,null);preparePlayerFrameSandbox();setPlayerFrameSrc(id,type,null,null,currentSrc,prog?prog.secs:0);startPlayerAutoSave(prog?prog.secs:0);const playerModal=document.getElementById('player-modal');playerModal.classList.add('open');resetPanelScroll(playerModal);lockBodyScroll();saveWatching(id,type,title,poster,null,null);updateNextEpisodeButton();updateSourceState();}
   savePlayerNavState(true);
   refreshCW();
 }
@@ -1879,6 +1892,7 @@ async function activatePiP(silent=false){
       ic.src=fr.src;
       ic.style.cssText='width:100%;height:100%;border:none;background:#000';
       ic.setAttribute('allow','autoplay; fullscreen; picture-in-picture; encrypted-media');
+      ic.setAttribute('sandbox',PLAYER_IFRAME_SANDBOX);
       ic.setAttribute('allowfullscreen','');
       ic.setAttribute('playsinline','');
       pw.document.body.style.cssText='margin:0;background:#000';
