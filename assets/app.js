@@ -14,6 +14,7 @@ let activeFilterGenre={serie:null,film:null,anime:null},currentTrailerKey=null,e
 let playerProgId=null,playerProgType=null,playerProgSeason=null,playerProgEpisode=null,playerNoteSavedThisSession=false;
 let playerSessionTitle='',playerSessionPoster='',playerSessionIsAnime=false,playerLastAutoSecs=0,playerLastAutoSaveAt=0,playerAutoSaveTimer=null,playerHasRealProgress=false,playerSourceHealthTimer=null;
 let playerStreamSeq=0;
+let playerRestoreTimer=0;
 let playerSessionAnimeTitles=[],currentDetailAnimeTitles=[],playerSessionSeasons=[];
 let profileStatsCache=null,calendarEntriesCache=[];
 let animeExternalUrl='',sportWatchUrl='',sportRefreshTimer=null;
@@ -42,6 +43,7 @@ const DATA_KEYS=['svx_f','svx_w','svx_prog','svx_r','svx_sh','svx_notif','svx_no
 const NOTIF_PROMPT_KEY='svx_notif_prompt_v2';
 const NAV_STATE_KEY='svx_nav_state';
 const PLAYER_RESUME_KEY='svx_player_resume';
+const PLAYER_ROUTE_FLAG='sgnPlayer';
 const NAV_RESTORE_WINDOW=30*60*1000;
 const RESTORABLE_PAGES=new Set(['home','film','serie','anime','sport','calendario','liste','profilo']);
 const storageMemory={};
@@ -101,10 +103,17 @@ function hydrateStorageMemoryFromLocal(){
       if(key&&key.startsWith('svx_'))storageMemory[key]=localStorage.getItem(key);
     }
   }catch(e){}
+  try{
+    [NAV_STATE_KEY,PLAYER_RESUME_KEY].forEach(key=>{
+      const raw=sessionStorage.getItem(key);
+      if(raw!==null)storageMemory[key]=raw;
+    });
+  }catch(e){}
 }
 function readJSONKey(key,fallback){
   try{
-    const raw=storageMemory[key]??localStorage.getItem(key);
+    const sessionRaw=(key===NAV_STATE_KEY||key===PLAYER_RESUME_KEY)?sessionStorage.getItem(key):null;
+    const raw=storageMemory[key]??sessionRaw??localStorage.getItem(key);
     return raw?JSON.parse(raw):fallback;
   }catch(e){return fallback;}
 }
@@ -112,12 +121,14 @@ function writeJSONKey(key,value){
   try{
     const raw=JSON.stringify(value);
     storageMemory[key]=raw;
+    if(key===NAV_STATE_KEY||key===PLAYER_RESUME_KEY)try{sessionStorage.setItem(key,raw);}catch(e){}
     try{localStorage.setItem(key,raw);}catch(e){}
     idbSetRaw(key,raw);
   }catch(e){}
 }
 function removeJSONKey(key){
   delete storageMemory[key];
+  try{sessionStorage.removeItem(key);}catch(e){}
   try{localStorage.removeItem(key);}catch(e){}
   idbDelete(key);
 }
@@ -144,12 +155,93 @@ function playerNavSnapshot(open=document.getElementById('player-modal')?.classLi
     savedAt:Date.now()
   };
 }
+function normalizePlayerSnapshot(raw,forceOpen=true){
+  if(!raw)return null;
+  const id=String(raw.id||raw.pid||'').trim();
+  if(!id)return null;
+  const season=raw.season??raw.s??null,episode=raw.episode??raw.ep??null;
+  return {
+    open:forceOpen?true:!!raw.open,
+    id,
+    type:String(raw.type||raw.ptype||'movie')==='tv'?'tv':'movie',
+    title:String(raw.title||raw.t||'StreaMGN'),
+    poster:String(raw.poster||raw.p||''),
+    season:season!==null&&season!==''?Number(season):null,
+    episode:episode!==null&&episode!==''?Number(episode):null,
+    isAnime:!!(raw.isAnime||raw.anime),
+    src:String(raw.src||currentSrc||'vixsrc'),
+    page:RESTORABLE_PAGES.has(raw.page)?raw.page:activePageName(),
+    savedAt:Number(raw.savedAt||raw.updatedAt||Date.now())
+  };
+}
+function readPlayerRouteSnapshot(){
+  try{
+    const hash=location.hash?location.hash.slice(1):'';
+    if(!hash)return null;
+    const p=new URLSearchParams(hash);
+    if(p.get(PLAYER_ROUTE_FLAG)!=='1')return null;
+    return normalizePlayerSnapshot({
+      id:p.get('id'),
+      type:p.get('type'),
+      title:p.get('title'),
+      poster:p.get('poster'),
+      season:p.get('season'),
+      episode:p.get('episode'),
+      isAnime:p.get('anime')==='1',
+      src:p.get('src'),
+      page:p.get('page'),
+      savedAt:Number(p.get('ts')||0)
+    });
+  }catch(e){return null;}
+}
+function readHistoryPlayerSnapshot(){
+  try{
+    const p=history.state?.streamgnPlayer;
+    if(!p)return null;
+    return normalizePlayerSnapshot(p);
+  }catch(e){return null;}
+}
+function writePlayerRoute(snapshot){
+  const p=normalizePlayerSnapshot(snapshot);
+  if(!p?.open||!p.id)return;
+  try{
+    const params=new URLSearchParams();
+    params.set(PLAYER_ROUTE_FLAG,'1');
+    params.set('id',p.id);
+    params.set('type',p.type);
+    params.set('title',p.title||'StreaMGN');
+    if(p.poster)params.set('poster',p.poster);
+    if(p.season)params.set('season',String(p.season));
+    if(p.episode)params.set('episode',String(p.episode));
+    if(p.isAnime)params.set('anime','1');
+    if(p.src)params.set('src',p.src);
+    params.set('page',p.page||activePageName());
+    params.set('ts',String(Date.now()));
+    const url=new URL(location.href);
+    url.hash=params.toString();
+    const state=history.state&&typeof history.state==='object'?history.state:{};
+    history.replaceState({...state,streamgnPlayer:{...p,updatedAt:Date.now()}},'',url);
+  }catch(e){}
+}
+function clearPlayerRoute(){
+  try{
+    const url=new URL(location.href);
+    const current=readPlayerRouteSnapshot();
+    if(current)url.hash='';
+    const state=history.state&&typeof history.state==='object'?{...history.state}:{};
+    delete state.streamgnPlayer;
+    history.replaceState(state,'',url);
+  }catch(e){}
+}
 function savePlayerResumeBackup(snapshot=playerNavSnapshot(true)){
+  snapshot=normalizePlayerSnapshot(snapshot);
   if(!snapshot?.open||!snapshot.id)return;
   const now=Date.now();
-  writeJSONKey(PLAYER_RESUME_KEY,{...snapshot,page:activePageName(),updatedAt:now,reopenUntil:now+NAV_RESTORE_WINDOW});
+  const page=snapshot.page||activePageName();
+  writeJSONKey(PLAYER_RESUME_KEY,{...snapshot,page,updatedAt:now,reopenUntil:now+NAV_RESTORE_WINDOW});
+  writePlayerRoute({...snapshot,page,updatedAt:now});
 }
-function clearPlayerResumeBackup(){removeJSONKey(PLAYER_RESUME_KEY);}
+function clearPlayerResumeBackup(){removeJSONKey(PLAYER_RESUME_KEY);clearPlayerRoute();}
 function saveCurrentNavState(extra={}){
   const player=playerNavSnapshot();
   if(player.open)savePlayerResumeBackup(player);
@@ -435,9 +527,11 @@ function syncViewportMetrics(){
   document.documentElement.style.setProperty('--app-vh',`${window.innerHeight||document.documentElement.clientHeight}px`);
   document.documentElement.style.setProperty('--app-vw',`${window.innerWidth||document.documentElement.clientWidth}px`);
 }
+function isPlayerOpen(){return !!document.getElementById('player-modal')?.classList.contains('open');}
 function scheduleViewportSync(){
   clearTimeout(viewportUpdateTimer);
-  viewportUpdateTimer=setTimeout(()=>{syncViewportMetrics();requestReadableContrast();},180);
+  if(isPlayerOpen())savePlayerNavState(true);
+  viewportUpdateTimer=setTimeout(()=>{syncViewportMetrics();requestReadableContrast();if(!isPlayerOpen())restoreSavedPlayerIfNeeded(90,true);},180);
 }
 syncViewportMetrics();
 window.addEventListener('resize',scheduleViewportSync,{passive:true});
@@ -1720,7 +1814,7 @@ async function openPlayer(id,type,title,poster,season,episode,isAnime){
     return;
   }
   currentIsAnime=resolvedAnime;currentSrc=getPreferredSource(id,type,initialS,initialE,resolvedAnime,resolvedAnime?'streamrip':'vixsrc');currentTvId=String(id);document.getElementById('pm-title').textContent=title;document.getElementById('anime-note').style.display='none';buildSrcToggle(resolvedAnime);autoAddToWatching({id:String(id),type,title,poster:poster||'',isAnime:resolvedAnime});
-  playerProgId=String(id);playerProgType=type;playerProgSeason=season||null;playerProgEpisode=episode||null;playerNoteSavedThisSession=true;playerSessionTitle=title;playerSessionPoster=poster||'';playerSessionIsAnime=resolvedAnime;playerSessionAnimeTitles=resolvedAnime?uniqueTextList([title,...(currentDetailId===String(id)?currentDetailAnimeTitles:[])]):[];playerSessionSeasons=[];playerLastAutoSecs=0;playerLastAutoSaveAt=0;stopPlayerAutoSave(false);hideReminderOverlay();document.getElementById('pm-note-bar').classList.remove('highlight');updateDeviceMediaSession(title,type,poster,season,episode);
+  playerProgId=String(id);playerProgType=type;playerProgSeason=type==='tv'?Number(initialS):null;playerProgEpisode=type==='tv'?Number(initialE):null;playerNoteSavedThisSession=true;playerSessionTitle=title;playerSessionPoster=poster||'';playerSessionIsAnime=resolvedAnime;playerSessionAnimeTitles=resolvedAnime?uniqueTextList([title,...(currentDetailId===String(id)?currentDetailAnimeTitles:[])]):[];playerSessionSeasons=[];playerLastAutoSecs=0;playerLastAutoSaveAt=0;stopPlayerAutoSave(false);hideReminderOverlay();document.getElementById('pm-note-bar').classList.remove('highlight');updateDeviceMediaSession(title,type,poster,season,episode);
   if(type==='tv'){setPlayerTvControlsVisible(true);const sSel=document.getElementById('s-sel'),eSel=document.getElementById('e-sel');sSel.innerHTML='<option>Caricamento...</option>';eSel.innerHTML='<option>Caricamento...</option>';syncPlayerPickers();const playerModal=document.getElementById('player-modal');playerModal.classList.add('open');resetPanelScroll(playerModal);lockBodyScroll();const lastS=initialS,lastE=initialE;try{const show=await tmdb(`/tv/${id}`);if(resolvedAnime)playerSessionAnimeTitles=uniqueTextList([...playerSessionAnimeTitles,...animeTitleCandidates(show,title)]);const seasons=(show.seasons||[]).filter(s=>s.season_number>0);if(!seasons.length)seasons.push({season_number:1,episode_count:10,name:'Stagione 1'});playerSessionSeasons=seasons;sSel.innerHTML=seasons.map(s=>`<option value="${s.season_number}">S${s.season_number} - ${s.name||'Stagione '+s.season_number} (${s.episode_count||'?'} ep.)</option>`).join('');sSel.value=String(lastS);syncPlayerPickers();await loadEpisodesForPlayer(id,sSel.value,lastE);}catch(e){sSel.innerHTML='<option value="1">Stagione 1</option>';eSel.innerHTML='<option value="1">Episodio 1</option>';syncPlayerPickers();}const s=sSel.value||1,ep=document.getElementById('e-sel').value||1;playerProgSeason=Number(s);playerProgEpisode=Number(ep);syncPlayerPickers();currentSrc=getPreferredSource(id,type,s,ep,resolvedAnime,currentSrc);buildSrcToggle(resolvedAnime);refreshNoteBar(id,type,s,ep);const prog=getProgress(id,type,s,ep);clearPlayerFrameSandbox();setPlayerFrameSrc(id,type,s,ep,currentSrc,prog?prog.secs:0);startPlayerAutoSave(prog?prog.secs:0);saveWatching(id,type,title,poster,s,ep);updateNextEpisodeButton();updateSourceState();}
   else{setPlayerTvControlsVisible(false);playerProgSeason=null;playerProgEpisode=null;refreshNoteBar(id,type,null,null);const prog=getProgress(id,type,null,null);clearPlayerFrameSandbox();setPlayerFrameSrc(id,type,null,null,currentSrc,prog?prog.secs:0);startPlayerAutoSave(prog?prog.secs:0);const playerModal=document.getElementById('player-modal');playerModal.classList.add('open');resetPanelScroll(playerModal);lockBodyScroll();saveWatching(id,type,title,poster,null,null);updateNextEpisodeButton();updateSourceState();}
   savePlayerNavState(true);
@@ -1808,17 +1902,30 @@ async function activatePiP(silent=false){
 document.getElementById('btn-pip').addEventListener('click',()=>activatePiP(false));
 
 /* AUTOMATICO: quando l'utente esce dall'app con il player aperto */
+function rememberOpenPlayer(reason=''){
+  if(!isPlayerOpen())return false;
+  savePlayerNavState(true);
+  savePlayerResumeBackup({...playerNavSnapshot(true),reason});
+  return true;
+}
+function restorePlayerAfterLifecycle(delay=120){
+  if(!getRestorablePlayerSnapshot())return false;
+  restoreSavedPageIfNeeded(true);
+  restoreSavedPlayerIfNeeded(delay,true);
+  return true;
+}
 document.addEventListener('visibilitychange',()=>{
-  const playerOpen=document.getElementById('player-modal').classList.contains('open');
-  saveCurrentNavState();
+  const playerOpen=isPlayerOpen();
+  if(playerOpen)rememberOpenPlayer(document.hidden?'hidden':'visible');
+  else if(!document.hidden)restorePlayerAfterLifecycle(90);
+  saveCurrentNavState({visibilityAt:Date.now(),visibilityState:document.visibilityState});
   if(!playerOpen)return;
   if(document.hidden){
-    savePlayerResumeBackup(playerNavSnapshot(true));
     persistEstimatedProgress();
     return;
   } else {
     syncViewportMetrics();
-    restoreSavedPlayerIfNeeded(80,true);
+    restorePlayerAfterLifecycle(80);
     if(pipActive&&(isIOS||isSafari)){
       try{
         if(document.webkitExitFullscreen)document.webkitExitFullscreen();
@@ -1829,26 +1936,29 @@ document.addEventListener('visibilitychange',()=>{
   }
 });
 function saveLeavingState(){
-  if(document.getElementById('player-modal')?.classList.contains('open'))savePlayerResumeBackup(playerNavSnapshot(true));
+  rememberOpenPlayer('leaving');
   saveCurrentNavState({leavingAt:Date.now()});
   persistEstimatedProgress();
 }
 window.addEventListener('pagehide',saveLeavingState);
 window.addEventListener('beforeunload',saveLeavingState);
-window.addEventListener('blur',()=>{if(document.getElementById('player-modal')?.classList.contains('open'))saveLeavingState();},{passive:true});
-window.addEventListener('focus',()=>{syncViewportMetrics();restoreSavedPageIfNeeded(true);restoreSavedPlayerIfNeeded(80,true);},{passive:true});
+window.addEventListener('blur',()=>{if(isPlayerOpen())saveLeavingState();},{passive:true});
+window.addEventListener('focus',()=>{syncViewportMetrics();rememberOpenPlayer('focus');restorePlayerAfterLifecycle(80);},{passive:true});
 window.addEventListener('pageshow',e=>{
   syncViewportMetrics();
   requestReadableContrast();
-  if(e.persisted){
-    restoreSavedPageIfNeeded(true);
-    restoreSavedPlayerIfNeeded(220,true);
-  }
+  restorePlayerAfterLifecycle(e.persisted?160:240);
 },{passive:true});
-window.addEventListener('orientationchange',()=>saveCurrentNavState({orientationAt:Date.now()}),{passive:true});
+window.addEventListener('orientationchange',()=>{
+  rememberOpenPlayer('orientation');
+  saveCurrentNavState({orientationAt:Date.now()});
+  [80,360,900].forEach(ms=>setTimeout(()=>{syncViewportMetrics();restorePlayerAfterLifecycle(90);},ms));
+},{passive:true});
+document.addEventListener('freeze',saveLeavingState);
+document.addEventListener('resume',()=>{syncViewportMetrics();restorePlayerAfterLifecycle(120);});
 document.addEventListener('click',e=>{const a=e.target.closest?.('a[target="_blank"]');if(a)saveLeavingState();},true);
-document.getElementById('player-modal')?.addEventListener('pointerdown',()=>{if(document.getElementById('player-modal')?.classList.contains('open'))savePlayerNavState(true);},true);
-document.getElementById('vix-frame')?.addEventListener('load',()=>{if(document.getElementById('player-modal')?.classList.contains('open'))savePlayerNavState(true);});
+document.getElementById('player-modal')?.addEventListener('pointerdown',()=>rememberOpenPlayer('player-pointer'),true);
+document.getElementById('vix-frame')?.addEventListener('load',()=>rememberOpenPlayer('frame-load'));
 
 /* FOLDER PICKER */
 function openFolderPicker(item){fpCurrentItem=item;fpPendingCat=null;renderFPStep1();document.getElementById('folder-picker').classList.add('open');resetPanelScroll('#folder-picker .fp-sheet');lockBodyScroll();}
@@ -2013,7 +2123,7 @@ document.getElementById('search-content-grid').addEventListener('click',e=>{
 function drag(row){if(!row||row.dataset.dragReady==='1')return;row.dataset.dragReady='1';let down=false,sx,sl,moved=false;row.addEventListener('mousedown',e=>{if(e.target.closest('button,a,input,select,.plus-card'))return;down=true;moved=false;sx=e.pageX-row.offsetLeft;sl=row.scrollLeft;row.classList.add('drag');},{passive:true});row.addEventListener('mouseleave',()=>{down=false;row.classList.remove('drag');});row.addEventListener('mouseup',()=>{down=false;row.classList.remove('drag');});row.addEventListener('mousemove',e=>{if(!down)return;const dx=e.pageX-row.offsetLeft-sx;if(Math.abs(dx)>4){moved=true;row.scrollLeft=sl-dx;}},{passive:true});row.addEventListener('click',e=>{if(moved&&!e.target.closest('button,a,input,select,.plus-card')){e.stopPropagation();e.preventDefault();}moved=false;},true);}
 
 /* SWIPE BACK */
-(()=>{let tx=0,ty=0;document.addEventListener('touchstart',e=>{tx=e.touches[0].clientX;ty=e.touches[0].clientY;},{passive:true});document.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-tx,dy=Math.abs(e.changedTouches[0].clientY-ty);if(tx>40||dx<80||dy>60)return;if(document.getElementById('external-watch-modal').classList.contains('open')){closeExternalWatchPrompt();return;}if(document.getElementById('sport-detail-modal').classList.contains('open')){closeSportDetail();return;}if(document.getElementById('actor-modal').classList.contains('open')){closeActor();return;}if(document.getElementById('import-modal').classList.contains('open')){closeImportModal();return;}if(document.getElementById('export-sel-modal').classList.contains('open')){closeExportModal();return;}if(document.getElementById('confirm-modal').classList.contains('open')){closeConfirm();return;}if(document.getElementById('folder-picker').classList.contains('open')){closeFolderPicker();return;}if(document.getElementById('player-modal').classList.contains('open')){closePlayer();return;}if(document.getElementById('detail-modal').classList.contains('open')){closeDetail();return;}if(document.getElementById('search-ov').classList.contains('open')){closeSearch();}},{passive:true});})();
+(()=>{let tx=0,ty=0;document.addEventListener('touchstart',e=>{tx=e.touches[0].clientX;ty=e.touches[0].clientY;},{passive:true});document.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-tx,dy=Math.abs(e.changedTouches[0].clientY-ty);if(tx>40||dx<80||dy>60)return;if(document.getElementById('external-watch-modal').classList.contains('open')){closeExternalWatchPrompt();return;}if(document.getElementById('sport-detail-modal').classList.contains('open')){closeSportDetail();return;}if(document.getElementById('actor-modal').classList.contains('open')){closeActor();return;}if(document.getElementById('import-modal').classList.contains('open')){closeImportModal();return;}if(document.getElementById('export-sel-modal').classList.contains('open')){closeExportModal();return;}if(document.getElementById('confirm-modal').classList.contains('open')){closeConfirm();return;}if(document.getElementById('folder-picker').classList.contains('open')){closeFolderPicker();return;}if(document.getElementById('player-modal').classList.contains('open')){rememberOpenPlayer('edge-swipe');return;}if(document.getElementById('detail-modal').classList.contains('open')){closeDetail();return;}if(document.getElementById('search-ov').classList.contains('open')){closeSearch();}},{passive:true});})();
 
 /* RANDOM */
 document.querySelectorAll('.random-btn[data-random]').forEach(btn=>{btn.addEventListener('click',()=>{const pool=randomPools[btn.dataset.random];if(!pool.length){showToast('Caricamento ancora in corso…');return;}const item=pool[Math.floor(Math.random()*pool.length)];openDetail(item.id,item.media_type||'tv',item.poster_path||'',!!item._anime);});});
@@ -2029,13 +2139,15 @@ stBtn.addEventListener('click',()=>window.scrollTo({top:0,behavior:'smooth'}));
 function activatePage(pg,opts={}){
   const page=document.getElementById('page-'+pg);
   if(!page)return;
-  const keepPlayer=opts.preservePlayer&&document.getElementById('player-modal')?.classList.contains('open');
-  if(keepPlayer){
+  if(opts.preservePlayer){
     closeTransientLayers();
     hardCloseLayer('#detail-modal');
     hardCloseLayer('#actor-modal');
     hardCloseLayer('#sport-detail-modal');
-  }else closeContentLayers();
+  }else{
+    closeContentLayers();
+    clearPlayerResumeBackup();
+  }
   if(pg!=='sport')stopSportAutoRefresh();
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   page.classList.add('active');
@@ -2397,28 +2509,38 @@ document.addEventListener('keydown',e=>{if(e.target.tagName==='INPUT'||e.target.
 document.getElementById('detail-modal').addEventListener('click',function(e){if(e.target===this)closeDetail();});
 
 loadHome();
+function getRestorablePlayerSnapshot(){
+  const now=Date.now(),saved=getNavState(),navPlayer=saved.player||{},backup=readJSONKey(PLAYER_RESUME_KEY,null);
+  const route=readPlayerRouteSnapshot();
+  if(route?.id)return route;
+  const candidates=[];
+  if(navPlayer.open&&navPlayer.id&&now-(saved.updatedAt||navPlayer.savedAt||0)<NAV_RESTORE_WINDOW)candidates.push(normalizePlayerSnapshot({...navPlayer,page:saved.page,updatedAt:saved.updatedAt}));
+  if(backup?.open&&backup.id&&(backup.reopenUntil||0)>now)candidates.push(normalizePlayerSnapshot(backup));
+  const hist=readHistoryPlayerSnapshot();
+  if(hist?.id&&now-(hist.updatedAt||hist.savedAt||0)<NAV_RESTORE_WINDOW)candidates.push(hist);
+  return candidates.filter(Boolean).sort((a,b)=>(b.updatedAt||b.savedAt||0)-(a.updatedAt||a.savedAt||0))[0]||null;
+}
 function restoreSavedPlayerIfNeeded(delay=120,force=false){
   try{
-    const saved=getNavState(),now=Date.now(),navType=performance.getEntriesByType?.('navigation')?.[0]?.type||'navigate';
-    const recent=now-(saved.updatedAt||0)<NAV_RESTORE_WINDOW,navPlayer=saved.player||{};
-    const backup=readJSONKey(PLAYER_RESUME_KEY,null);
-    const backupOpen=!!(backup?.open&&backup.id&&(backup.reopenUntil||0)>now);
-    let p=recent&&navPlayer.open&&navPlayer.id?navPlayer:null;
-    if(!p&&backupOpen&&(force||navType==='reload'||navType==='back_forward'))p=backup;
+    const navType=performance.getEntriesByType?.('navigation')?.[0]?.type||'navigate';
+    const p=getRestorablePlayerSnapshot();
     if(!p?.open||!p.id)return;
     if(document.getElementById('player-modal')?.classList.contains('open'))return;
     if(!force&&navType!=='reload'&&navType!=='back_forward')return;
-    setTimeout(()=>openPlayer(p.id,p.type||'movie',p.title||'StreaMGN',p.poster||'',p.season||null,p.episode||null,!!p.isAnime),delay);
+    clearTimeout(playerRestoreTimer);
+    playerRestoreTimer=setTimeout(()=>{
+      if(document.getElementById('player-modal')?.classList.contains('open'))return;
+      openPlayer(p.id,p.type||'movie',p.title||'StreaMGN',p.poster||'',p.season||null,p.episode||null,!!p.isAnime);
+    },delay);
   }catch(e){}
 }
 function restoreSavedPageIfNeeded(force=false){
   try{
-    const saved=getNavState(),backup=readJSONKey(PLAYER_RESUME_KEY,null),now=Date.now(),navType=performance.getEntriesByType?.('navigation')?.[0]?.type||'navigate';
-    const backupOpen=!!(backup?.open&&backup.id&&(backup.reopenUntil||0)>now);
-    const page=(backupOpen&&backup.page)||saved.page||'home';
-    const recent=now-(saved.updatedAt||0)<NAV_RESTORE_WINDOW||(backupOpen&&now-(backup.updatedAt||0)<NAV_RESTORE_WINDOW);
+    const saved=getNavState(),player=getRestorablePlayerSnapshot(),now=Date.now(),navType=performance.getEntriesByType?.('navigation')?.[0]?.type||'navigate';
+    const page=player?.page||saved.page||'home';
+    const recent=now-(saved.updatedAt||0)<NAV_RESTORE_WINDOW||!!player;
     const leavingRecent=Date.now()-(saved.leavingAt||0)<NAV_RESTORE_WINDOW;
-    const playerOpen=!!saved.player?.open||backupOpen;
+    const playerOpen=!!saved.player?.open||!!player;
     if(!RESTORABLE_PAGES.has(page)||!recent)return false;
     if(!force&&navType==='navigate'&&!leavingRecent&&!playerOpen)return false;
     if(activePageName()===page)return true;
@@ -2431,6 +2553,11 @@ function restoreInitialRoute(){
     const q=new URLSearchParams(location.search);
     let page=q.get('page');
     if(page==='novita')page='profilo';
+    if(getRestorablePlayerSnapshot()){
+      restoreSavedPageIfNeeded(true);
+      restoreSavedPlayerIfNeeded(220,true);
+      return;
+    }
     if(page&&document.querySelector(`.nav-btn[data-page="${page}"]`))document.querySelector(`.nav-btn[data-page="${page}"]`).click();
     if(q.get('actor')){openActor(q.get('actor'));return;}
     if(q.get('id')){openDetail(q.get('id'),q.get('type')||'movie','',q.get('anime')==='1');restoreSavedPlayerIfNeeded(450);return;}
