@@ -245,7 +245,7 @@ function writePlayerRoute(snapshot){
     const nextHash=params.toString();
     const state=history.state&&typeof history.state==='object'?history.state:{};
     const nextState={...state,streamgnPlayer:{...p,updatedAt}};
-    if((location.hash?location.hash.slice(1):'')===nextHash){
+    if((location.hash?location.hash.slice(1):'')===nextHash&&history.state?.streamgnPlayer){
       return;
     }
     url.hash=nextHash;
@@ -284,12 +284,21 @@ function savePlayerResumeBackup(snapshot=playerNavSnapshot(true)){
   writePlayerRoute({...snapshot,page,updatedAt:now});
 }
 function clearPlayerResumeBackup(){removeJSONKey(PLAYER_RESUME_KEY);clearPlayerRoute();}
+function persistOpenPlayerState(reason=''){
+  const snapshot={...playerNavSnapshot(true),page:activePageName(),reason};
+  if(!snapshot.id)return false;
+  savePlayerResumeBackup(snapshot);
+  writeNavState({page:snapshot.page,player:snapshot});
+  ensurePlayerHistoryGuard(snapshot);
+  return true;
+}
 function saveCurrentNavState(extra={}){
   const player=playerNavSnapshot();
   if(player.open)savePlayerResumeBackup(player);
   writeNavState({page:activePageName(),player,...extra});
 }
 function savePlayerNavState(open=true){
+  if(open&&persistOpenPlayerState('nav'))return;
   const prev=getNavState();
   const player={...(prev.player||{}),...playerNavSnapshot(open)};
   if(player.open)savePlayerResumeBackup(player);
@@ -1015,6 +1024,13 @@ function setFrameMessage(frame,title,body,actionUrl=''){
   frame.removeAttribute('src');
   frame.srcdoc=`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;width:100%;height:100%;background:#050505;color:#fff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif}.wrap{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;padding:28px;box-sizing:border-box}.box{max-width:520px}.title{font-size:20px;font-weight:800;margin-bottom:10px}.body{font-size:14px;line-height:1.45;color:rgba(255,255,255,.68)}</style></head><body><div class="wrap"><div class="box"><div class="title">${ea(title)}</div><div class="body">${ea(body)}</div>${link}</div></div></body></html>`;
 }
+function setIframeSrcIfChanged(frame,url){
+  const next=String(url||'');
+  if(!frame||!next)return false;
+  if((frame.getAttribute('src')||'')===next)return false;
+  frame.src=next;
+  return true;
+}
 function withTimeout(promise,ms,message='timeout'){
   let timer;
   const timeout=new Promise(resolve=>{timer=setTimeout(()=>resolve({ok:false,embedUrl:'',error:message}),ms);});
@@ -1075,9 +1091,10 @@ async function resolveStreamUrl(id,type,season,episode,src,startSecs){
 async function setPlayerFrameSrc(id,type,season,episode,src,startSecs){
   const fr=document.getElementById('vix-frame');if(!fr)return;
   preparePlayerFrame(fr);
+  persistOpenPlayerState('before-frame-src');
   const seq=++playerStreamSeq,fallback=getEmbedUrl(id,type,season,episode,src,startSecs),providers=window.StreamGNProviders,anime=isAnimeSource(src);
   if(anime)setFrameMessage(fr,'Caricamento episodio','Un attimo.');
-  else{showIframePlayer(fr);fr.removeAttribute('srcdoc');fr.src=providers?.hasBackend?.()?'about:blank':fallback;}
+  else{showIframePlayer(fr);fr.removeAttribute('srcdoc');setIframeSrcIfChanged(fr,providers?.hasBackend?.()?'about:blank':fallback);}
   const result=await withTimeout(resolveStreamResult(id,type,season,episode,src,startSecs),anime?12000:18000,'anime provider timeout');
   if(seq!==playerStreamSeq||String(currentTvId)!==String(id))return;
   const url=result?.embedUrl||result?.iframeUrl||result?.url||fallback;
@@ -1088,7 +1105,7 @@ async function setPlayerFrameSrc(id,type,season,episode,src,startSecs){
   if(isDirectVideoUrl(url)&&setNativeVideoSrc(url,startSecs))return;
   showIframePlayer(fr);
   fr.removeAttribute('srcdoc');
-  fr.src=url||fallback;
+  setIframeSrcIfChanged(fr,url||fallback);
 }
 
 /* TRAILERS */
