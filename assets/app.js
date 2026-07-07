@@ -39,12 +39,14 @@ const MV_GENRES=[{name:'Tutti',id:null},{name:'Thriller',id:53},{name:'Crime',id
 const TV_GENRES=[{name:'Tutti',id:null},{name:'Crime',id:80},{name:'Dramma',id:18},{name:'Commedia',id:35},{name:'Sci-Fi',id:10765},{name:'Mistero',id:9648},{name:'Reality',id:10764},{name:'Action',id:10759}];
 const DEF_FOLDERS=[{id:'film_watch',name:'FILM che sto guardando',g:'watching',mt:'movie',an:false},{id:'serie_watch',name:'SERIE che sto guardando',g:'watching',mt:'tv',an:false},{id:'film_lista',name:'FILM in lista',g:'lista',mt:'movie',an:false},{id:'serie_lista',name:'SERIE in lista',g:'lista',mt:'tv',an:false},{id:'film_visti',name:'FILM visti',g:'visti',mt:'movie',an:false},{id:'serie_vc',name:'SERIE viste (concluse)',g:'visti',mt:'tv',an:false,sub:'c'},{id:'serie_vo',name:'SERIE viste (in corso)',g:'visti',mt:'tv',an:false,sub:'o'}];
 const GROUPS=[{id:'watching',label:'👁️ Che sto guardando'},{id:'lista',label:'📋 In lista'},{id:'visti',label:'✅ Viste'}];
-const DATA_KEYS=['svx_f','svx_w','svx_prog','svx_r','svx_sh','svx_notif','svx_notif_asked','svx_notif_prompt_v2','svx_s','svx_sport_url','svx_src_pref','svx_src_bad','svx_ep_seen','svx_hist','svx_tmdb_cache','svx_sport_data_v1','svx_anilist_map','svx_offline_snapshot','svx_onboarding_v1','svx_nav_state','svx_player_resume'];
+const DATA_KEYS=['svx_f','svx_w','svx_prog','svx_r','svx_sh','svx_notif','svx_notif_asked','svx_notif_prompt_v2','svx_s','svx_sport_url','svx_src_pref','svx_src_bad','svx_ep_seen','svx_hist','svx_tmdb_cache','svx_sport_data_v1','svx_anilist_map','svx_offline_snapshot','svx_onboarding_v1','svx_nav_state','svx_player_resume','svx_player_closed'];
 const NOTIF_PROMPT_KEY='svx_notif_prompt_v2';
 const NAV_STATE_KEY='svx_nav_state';
 const PLAYER_RESUME_KEY='svx_player_resume';
+const PLAYER_CLOSED_KEY='svx_player_closed';
 const PLAYER_ROUTE_FLAG='sgnPlayer';
 const NAV_RESTORE_WINDOW=30*60*1000;
+const PLAYER_CLOSED_WINDOW=10*60*1000;
 const RESTORABLE_PAGES=new Set(['home','film','serie','anime','sport','calendario','liste','profilo']);
 const storageMemory={};
 let idbDb=null,idbHydrated=false;
@@ -155,6 +157,28 @@ function playerNavSnapshot(open=document.getElementById('player-modal')?.classLi
     savedAt:Date.now()
   };
 }
+function playerRouteSignature(raw){
+  const p=normalizePlayerSnapshot(raw);
+  if(!p?.id)return'';
+  return [p.id,p.type,p.season||'',p.episode||'',p.isAnime?'anime':'std',p.src||'vixsrc'].join('|');
+}
+function markPlayerExplicitlyClosed(snapshot=playerNavSnapshot(true)){
+  const p=normalizePlayerSnapshot(snapshot,false);
+  if(!p?.id)return;
+  writeJSONKey(PLAYER_CLOSED_KEY,{key:playerRouteSignature(p),id:p.id,type:p.type,season:p.season||null,episode:p.episode||null,closedAt:Date.now()});
+}
+function isRecentlyClosedPlayer(raw){
+  const p=normalizePlayerSnapshot(raw);
+  if(!p?.id)return false;
+  const closed=readJSONKey(PLAYER_CLOSED_KEY,null);
+  if(!closed?.id||Date.now()-(closed.closedAt||0)>PLAYER_CLOSED_WINDOW)return false;
+  return closed.key===playerRouteSignature(p)||(
+    String(closed.id)===String(p.id)&&
+    String(closed.type||'movie')===String(p.type||'movie')&&
+    String(closed.season||'')===String(p.season||'')&&
+    String(closed.episode||'')===String(p.episode||'')
+  );
+}
 function normalizePlayerSnapshot(raw,forceOpen=true){
   if(!raw)return null;
   const id=String(raw.id||raw.pid||'').trim();
@@ -228,6 +252,18 @@ function writePlayerRoute(snapshot){
     history.replaceState(nextState,'',url);
   }catch(e){}
 }
+function ensurePlayerHistoryGuard(snapshot=playerNavSnapshot(true)){
+  const p=normalizePlayerSnapshot(snapshot);
+  if(!p?.open||!p.id||isRecentlyClosedPlayer(p))return;
+  try{
+    writePlayerRoute(p);
+    const key=playerRouteSignature(p);
+    const current=history.state&&typeof history.state==='object'?history.state:{};
+    if(current.streamgnPlayerGuard?.key===key)return;
+    const guardState={...current,streamgnPlayer:{...p,updatedAt:Date.now()},streamgnPlayerGuard:{key,createdAt:Date.now()}};
+    history.pushState(guardState,'',location.href);
+  }catch(e){}
+}
 function clearPlayerRoute(){
   try{
     const url=new URL(location.href);
@@ -241,6 +277,7 @@ function clearPlayerRoute(){
 function savePlayerResumeBackup(snapshot=playerNavSnapshot(true)){
   snapshot=normalizePlayerSnapshot(snapshot);
   if(!snapshot?.open||!snapshot.id)return;
+  removeJSONKey(PLAYER_CLOSED_KEY);
   const now=Date.now();
   const page=snapshot.page||activePageName();
   writeJSONKey(PLAYER_RESUME_KEY,{...snapshot,page,updatedAt:now,reopenUntil:now+NAV_RESTORE_WINDOW});
@@ -260,6 +297,7 @@ function savePlayerNavState(open=true){
 }
 function clearSavedPlayerNavState(){
   const prev=getNavState();
+  markPlayerExplicitlyClosed(playerNavSnapshot(true));
   clearPlayerResumeBackup();
   writeNavState({page:activePageName(),player:{...(prev.player||{}),open:false,savedAt:Date.now()}});
 }
@@ -307,6 +345,11 @@ const idbReady=openIDB().then(db=>{if(db)syncMemoryToIDB();return db;});
 function refreshAfterStorageHydrated(){
   applyTheme(loadSettings().theme||'system');
   updateNotifBadge();refreshCW();
+  if(getRestorablePlayerSnapshot()){
+    restoreSavedPageIfNeeded(true);
+    restoreSavedPlayerIfNeeded(40,true);
+    return;
+  }
   const active=document.querySelector('.page.active')?.id||'page-home';
   if(active==='page-home'){loaded.home=false;loadHome();}
   if(active==='page-serie'){loaded.serie=false;loadSerie();}
@@ -1798,6 +1841,7 @@ function loadSelectedTvEpisode(s,ep){
   saveWatching(currentTvId,'tv',playerSessionTitle||document.getElementById('pm-title').textContent,playerSessionPoster,s,ep);
   updateDeviceMediaSession(playerSessionTitle,'tv',playerSessionPoster,s,ep);
   savePlayerNavState(true);
+  ensurePlayerHistoryGuard();
   refreshCW();
   updateNextEpisodeButton();
   updateSourceState();
@@ -1822,11 +1866,13 @@ async function openPlayer(id,type,title,poster,season,episode,isAnime){
     openExternalWatchPrompt('anime',{title,season:initialS,episode:initialE});
     return;
   }
+  removeJSONKey(PLAYER_CLOSED_KEY);
   currentIsAnime=resolvedAnime;currentSrc=getPreferredSource(id,type,initialS,initialE,resolvedAnime,resolvedAnime?'streamrip':'vixsrc');currentTvId=String(id);document.getElementById('pm-title').textContent=title;document.getElementById('anime-note').style.display='none';buildSrcToggle(resolvedAnime);autoAddToWatching({id:String(id),type,title,poster:poster||'',isAnime:resolvedAnime});
   playerProgId=String(id);playerProgType=type;playerProgSeason=type==='tv'?Number(initialS):null;playerProgEpisode=type==='tv'?Number(initialE):null;playerNoteSavedThisSession=true;playerSessionTitle=title;playerSessionPoster=poster||'';playerSessionIsAnime=resolvedAnime;playerSessionAnimeTitles=resolvedAnime?uniqueTextList([title,...(currentDetailId===String(id)?currentDetailAnimeTitles:[])]):[];playerSessionSeasons=[];playerLastAutoSecs=0;playerLastAutoSaveAt=0;stopPlayerAutoSave(false);hideReminderOverlay();document.getElementById('pm-note-bar').classList.remove('highlight');updateDeviceMediaSession(title,type,poster,season,episode);
   if(type==='tv'){setPlayerTvControlsVisible(true);const sSel=document.getElementById('s-sel'),eSel=document.getElementById('e-sel');sSel.innerHTML='<option>Caricamento...</option>';eSel.innerHTML='<option>Caricamento...</option>';syncPlayerPickers();const playerModal=document.getElementById('player-modal');playerModal.classList.add('open');resetPanelScroll(playerModal);lockBodyScroll();const lastS=initialS,lastE=initialE;try{const show=await tmdb(`/tv/${id}`);if(resolvedAnime)playerSessionAnimeTitles=uniqueTextList([...playerSessionAnimeTitles,...animeTitleCandidates(show,title)]);const seasons=(show.seasons||[]).filter(s=>s.season_number>0);if(!seasons.length)seasons.push({season_number:1,episode_count:10,name:'Stagione 1'});playerSessionSeasons=seasons;sSel.innerHTML=seasons.map(s=>`<option value="${s.season_number}">S${s.season_number} - ${s.name||'Stagione '+s.season_number} (${s.episode_count||'?'} ep.)</option>`).join('');sSel.value=String(lastS);syncPlayerPickers();await loadEpisodesForPlayer(id,sSel.value,lastE);}catch(e){sSel.innerHTML='<option value="1">Stagione 1</option>';eSel.innerHTML='<option value="1">Episodio 1</option>';syncPlayerPickers();}const s=sSel.value||1,ep=document.getElementById('e-sel').value||1;playerProgSeason=Number(s);playerProgEpisode=Number(ep);syncPlayerPickers();currentSrc=getPreferredSource(id,type,s,ep,resolvedAnime,currentSrc);buildSrcToggle(resolvedAnime);refreshNoteBar(id,type,s,ep);const prog=getProgress(id,type,s,ep);preparePlayerFrame();setPlayerFrameSrc(id,type,s,ep,currentSrc,prog?prog.secs:0);startPlayerAutoSave(prog?prog.secs:0);saveWatching(id,type,title,poster,s,ep);updateNextEpisodeButton();updateSourceState();}
   else{setPlayerTvControlsVisible(false);playerProgSeason=null;playerProgEpisode=null;refreshNoteBar(id,type,null,null);const prog=getProgress(id,type,null,null);preparePlayerFrame();setPlayerFrameSrc(id,type,null,null,currentSrc,prog?prog.secs:0);startPlayerAutoSave(prog?prog.secs:0);const playerModal=document.getElementById('player-modal');playerModal.classList.add('open');resetPanelScroll(playerModal);lockBodyScroll();saveWatching(id,type,title,poster,null,null);updateNextEpisodeButton();updateSourceState();}
   savePlayerNavState(true);
+  ensurePlayerHistoryGuard();
   refreshCW();
 }
 async function loadEpisodesForPlayer(showId,season,preselect){
@@ -2513,31 +2559,68 @@ document.addEventListener('click',e=>{
 document.addEventListener('keydown',e=>{if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||e.target.tagName==='TEXTAREA')return;if(e.key==='Escape'){if(document.getElementById('external-watch-modal').classList.contains('open')){closeExternalWatchPrompt();return;}if(document.getElementById('sport-detail-modal').classList.contains('open')){closeSportDetail();return;}if(document.getElementById('import-modal').classList.contains('open')){closeImportModal();return;}if(document.getElementById('export-sel-modal').classList.contains('open')){closeExportModal();return;}if(document.getElementById('actor-modal').classList.contains('open')){closeActor();return;}if(document.getElementById('confirm-modal').classList.contains('open')){closeConfirm();return;}if(document.getElementById('folder-picker').classList.contains('open')){closeFolderPicker();return;}if(document.getElementById('player-modal').classList.contains('open')){closePlayer();return;}if(document.getElementById('detail-modal').classList.contains('open')){closeDetail();return;}if(document.getElementById('search-ov').classList.contains('open')){closeSearch();return;}}if(e.key==='/'&&!document.getElementById('search-ov').classList.contains('open')){e.preventDefault();openSearch();}if(e.key==='ArrowLeft'&&heroItems.length)renderHero((heroIdx-1+heroItems.length)%heroItems.length);if(e.key==='ArrowRight'&&heroItems.length)renderHero((heroIdx+1)%heroItems.length);});
 document.getElementById('detail-modal').addEventListener('click',function(e){if(e.target===this)closeDetail();});
 
-loadHome();
+function ensureHomeLoaded(){
+  if(!loaded.home)loadHome();
+}
 function getRestorablePlayerSnapshot(){
   const now=Date.now(),saved=getNavState(),navPlayer=saved.player||{},backup=readJSONKey(PLAYER_RESUME_KEY,null);
   const route=readPlayerRouteSnapshot();
-  if(route?.id)return route;
+  if(route?.id&&!isRecentlyClosedPlayer(route))return route;
   const candidates=[];
   if(navPlayer.open&&navPlayer.id&&now-(saved.updatedAt||navPlayer.savedAt||0)<NAV_RESTORE_WINDOW)candidates.push(normalizePlayerSnapshot({...navPlayer,page:saved.page,updatedAt:saved.updatedAt}));
   if(backup?.open&&backup.id&&(backup.reopenUntil||0)>now)candidates.push(normalizePlayerSnapshot(backup));
   const hist=readHistoryPlayerSnapshot();
   if(hist?.id&&now-(hist.updatedAt||hist.savedAt||0)<NAV_RESTORE_WINDOW)candidates.push(hist);
-  return candidates.filter(Boolean).sort((a,b)=>(b.updatedAt||b.savedAt||0)-(a.updatedAt||a.savedAt||0))[0]||null;
+  return candidates.filter(p=>p&&!isRecentlyClosedPlayer(p)).sort((a,b)=>(b.updatedAt||b.savedAt||0)-(a.updatedAt||a.savedAt||0))[0]||null;
 }
 function restoreSavedPlayerIfNeeded(delay=120,force=false){
   try{
     const navType=performance.getEntriesByType?.('navigation')?.[0]?.type||'navigate';
     const p=getRestorablePlayerSnapshot();
     if(!p?.open||!p.id)return;
-    if(document.getElementById('player-modal')?.classList.contains('open'))return;
+    const modal=document.getElementById('player-modal');
+    const restoringId=modal?.dataset?.restoringPlayer||'';
+    if(modal?.classList.contains('open')&&restoringId!==String(p.id))return;
     if(!force&&navType!=='reload'&&navType!=='back_forward')return;
+    primePlayerRestoreShell(p);
     clearTimeout(playerRestoreTimer);
     playerRestoreTimer=setTimeout(()=>{
-      if(document.getElementById('player-modal')?.classList.contains('open'))return;
-      openPlayer(p.id,p.type||'movie',p.title||'StreaMGN',p.poster||'',p.season||null,p.episode||null,!!p.isAnime);
+      const currentRestoring=document.getElementById('player-modal')?.dataset?.restoringPlayer||'';
+      if(document.getElementById('player-modal')?.classList.contains('open')&&currentRestoring!==String(p.id))return;
+      Promise.resolve(openPlayer(p.id,p.type||'movie',p.title||'StreaMGN',p.poster||'',p.season||null,p.episode||null,!!p.isAnime))
+        .finally(()=>{delete document.getElementById('player-modal').dataset.restoringPlayer;});
     },delay);
   }catch(e){}
+}
+function primePlayerRestoreShell(p){
+  const modal=document.getElementById('player-modal'),fr=document.getElementById('vix-frame');
+  if(!modal||!fr)return;
+  modal.dataset.restoringPlayer=String(p.id);
+  currentTvId=String(p.id);
+  playerProgId=String(p.id);
+  playerProgType=p.type||'movie';
+  playerProgSeason=p.type==='tv'?Number(p.season||1):null;
+  playerProgEpisode=p.type==='tv'?Number(p.episode||1):null;
+  playerSessionTitle=p.title||'StreaMGN';
+  playerSessionPoster=p.poster||'';
+  playerSessionIsAnime=!!p.isAnime;
+  currentSrc=p.src||currentSrc||'vixsrc';
+  document.getElementById('pm-title').textContent=playerSessionTitle;
+  setPlayerTvControlsVisible(playerProgType==='tv');
+  if(playerProgType==='tv'){
+    const sSel=document.getElementById('s-sel'),eSel=document.getElementById('e-sel');
+    if(sSel&&!sSel.options.length)sSel.innerHTML=`<option value="${playerProgSeason||1}">Stagione ${playerProgSeason||1}</option>`;
+    if(eSel&&!eSel.options.length)eSel.innerHTML=`<option value="${playerProgEpisode||1}">Episodio ${playerProgEpisode||1}</option>`;
+    if(sSel)sSel.value=String(playerProgSeason||1);
+    if(eSel)eSel.value=String(playerProgEpisode||1);
+    syncPlayerPickers();
+  }
+  modal.classList.add('open');
+  resetPanelScroll(modal);
+  lockBodyScroll();
+  preparePlayerFrame(fr);
+  writePlayerRoute({...p,page:p.page||activePageName()});
+  if(!fr.getAttribute('src'))setFrameMessage(fr,'Ripristino player','Riapro il contenuto.');
 }
 function restoreSavedPageIfNeeded(force=false){
   try{
@@ -2560,7 +2643,8 @@ function restoreInitialRoute(){
     if(page==='novita')page='profilo';
     if(getRestorablePlayerSnapshot()){
       restoreSavedPageIfNeeded(true);
-      restoreSavedPlayerIfNeeded(220,true);
+      restoreSavedPlayerIfNeeded(40,true);
+      setTimeout(ensureHomeLoaded,900);
       return;
     }
     if(page&&document.querySelector(`.nav-btn[data-page="${page}"]`))document.querySelector(`.nav-btn[data-page="${page}"]`).click();
@@ -2568,9 +2652,10 @@ function restoreInitialRoute(){
     if(q.get('id')){openDetail(q.get('id'),q.get('type')||'movie','',q.get('anime')==='1');restoreSavedPlayerIfNeeded(450);return;}
     const restored=restoreSavedPageIfNeeded();
     restoreSavedPlayerIfNeeded(restored?420:120);
+    if(activePageName()==='home')ensureHomeLoaded();
   }catch(e){}
 }
-setTimeout(restoreInitialRoute,120);
+setTimeout(restoreInitialRoute,30);
 
 /* ============================================================
    SISTEMA NOTIFICHE — serie seguite + Top 10
