@@ -26,16 +26,25 @@ const SOURCES_ANIME=sourceListFromConfig('anime',['anime']);
 function isAppleTouchDevice(){
   return /iPad|iPhone|iPod/i.test(navigator.userAgent||'')||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 }
-function appleTouchAvoidSources(){
-  return new Set(CONFIG.appleTouchAvoidSources||['vixsrc','vidsrc']);
+function isMobileTouchDevice(){
+  const ua=navigator.userAgent||'';
+  const coarse=window.matchMedia?.('(pointer: coarse)')?.matches;
+  const mobileUA=/Mobi|Android|iPad|iPhone|iPod|Mobile|Tablet/i.test(ua);
+  const compact=Math.min(window.innerWidth||screen.width||0,window.innerHeight||screen.height||0)<=820;
+  return isAppleTouchDevice()||((navigator.maxTouchPoints||0)>0&&(mobileUA||coarse||compact));
+}
+function mobileTouchAvoidSources(){
+  return new Set(CONFIG.mobileTouchAvoidSources||CONFIG.appleTouchAvoidSources||['vixsrc','vidsrc']);
 }
 function shouldAvoidSourceOnDevice(src){
-  return CONFIG.avoidUnstableAppleTouchSources!==false&&isAppleTouchDevice()&&appleTouchAvoidSources().has(String(src||''));
+  const enabled=CONFIG.avoidUnstableMobileTouchSources??CONFIG.avoidUnstableAppleTouchSources;
+  return enabled!==false&&isMobileTouchDevice()&&mobileTouchAvoidSources().has(String(src||''));
 }
 function orderSourcesForDevice(list){
   if(!Array.isArray(list)||!list.length)return list||[];
-  if(!isAppleTouchDevice()||CONFIG.avoidUnstableAppleTouchSources===false)return list;
-  const preferred=String(CONFIG.appleTouchPreferredSource||'embed');
+  const enabled=CONFIG.avoidUnstableMobileTouchSources??CONFIG.avoidUnstableAppleTouchSources;
+  if(!isMobileTouchDevice()||enabled===false)return list;
+  const preferred=String(CONFIG.mobileTouchPreferredSource||CONFIG.appleTouchPreferredSource||'embed');
   const ordered=[preferred,...list].filter((src,idx,arr)=>src&&arr.indexOf(src)===idx&&list.includes(src)&&!shouldAvoidSourceOnDevice(src));
   return ordered.length?ordered:list;
 }

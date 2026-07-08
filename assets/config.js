@@ -32,6 +32,9 @@ window.STREAMGN_CONFIG = {
     normal: ['vixsrc', 'vidsrc', 'embed'],
     anime: ['streamrip']
   },
+  mobileTouchPreferredSource: 'embed',
+  mobileTouchAvoidSources: ['vixsrc', 'vidsrc'],
+  avoidUnstableMobileTouchSources: true,
   appleTouchPreferredSource: 'embed',
   appleTouchAvoidSources: ['vixsrc', 'vidsrc'],
   avoidUnstableAppleTouchSources: true,
