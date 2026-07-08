@@ -32,6 +32,9 @@ window.STREAMGN_CONFIG = {
     normal: ['vixsrc', 'vidsrc', 'embed'],
     anime: ['streamrip']
   },
+  appleTouchPreferredSource: 'embed',
+  appleTouchAvoidSources: ['vixsrc', 'vidsrc'],
+  avoidUnstableAppleTouchSources: true,
   streamripBaseUrl: 'https://streamrip-website-production.up.railway.app',
   aniListApiBase: 'https://graphql.anilist.co',
   tmdbCacheMaxAge: 6 * 60 * 60 * 1000,

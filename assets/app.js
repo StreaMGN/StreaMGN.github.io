@@ -23,6 +23,22 @@ const SOURCE_LABELS={vixsrc:'VixSrc',vidsrc:'VidSrc',embed:'Embed.su',anime:'Str
 function sourceListFromConfig(kind,fallback){return (CONFIG.streamUiSources?.[kind]||fallback).map(id=>({id,label:SOURCE_LABELS[id]||id}));}
 const SOURCES_NORMAL=sourceListFromConfig('normal',['vixsrc','vidsrc','embed']);
 const SOURCES_ANIME=sourceListFromConfig('anime',['anime']);
+function isAppleTouchDevice(){
+  return /iPad|iPhone|iPod/i.test(navigator.userAgent||'')||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+}
+function appleTouchAvoidSources(){
+  return new Set(CONFIG.appleTouchAvoidSources||['vixsrc','vidsrc']);
+}
+function shouldAvoidSourceOnDevice(src){
+  return CONFIG.avoidUnstableAppleTouchSources!==false&&isAppleTouchDevice()&&appleTouchAvoidSources().has(String(src||''));
+}
+function orderSourcesForDevice(list){
+  if(!Array.isArray(list)||!list.length)return list||[];
+  if(!isAppleTouchDevice()||CONFIG.avoidUnstableAppleTouchSources===false)return list;
+  const preferred=String(CONFIG.appleTouchPreferredSource||'embed');
+  const ordered=[preferred,...list].filter((src,idx,arr)=>src&&arr.indexOf(src)===idx&&list.includes(src)&&!shouldAvoidSourceOnDevice(src));
+  return ordered.length?ordered:list;
+}
 const SPORT_DEFAULT_URL=CONFIG.sportDefaultUrl||'https://pepperstream.xyz';
 const ANIME_UNITY_URL=CONFIG.animeUnityUrl||'https://www.animeunity.so';
 animeExternalUrl=ANIME_UNITY_URL;
@@ -1705,9 +1721,10 @@ function getSourceList(isAnime){return isAnime?SOURCES_ANIME:SOURCES_NORMAL;}
 function getPreferredSource(id,type,season,episode,isAnime,fallback){
   const key=sourceContentKey(id,type,season,episode),prefs=getSourcePrefs(),bad=getBadSources()[key]||{};
   const list=getSourceList(isAnime).map(s=>s.id);
-  if(prefs[key]&&list.includes(prefs[key])&&!bad[prefs[key]])return prefs[key];
-  if(fallback&&list.includes(fallback)&&!bad[fallback])return fallback;
-  return list.find(src=>!bad[src])||list[0];
+  const choices=orderSourcesForDevice(list);
+  if(prefs[key]&&choices.includes(prefs[key])&&!bad[prefs[key]])return prefs[key];
+  if(fallback&&choices.includes(fallback)&&!bad[fallback])return fallback;
+  return choices.find(src=>!bad[src])||list.find(src=>!bad[src])||list[0];
 }
 function setPreferredSource(id,type,season,episode,src){
   const key=sourceContentKey(id,type,season,episode),prefs=getSourcePrefs();
