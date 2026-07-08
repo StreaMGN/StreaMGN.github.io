@@ -164,15 +164,19 @@ async function handlePlay(request,env){
     startSecs:url.searchParams.get('startSecs')||url.searchParams.get('t')||0,
     lang:url.searchParams.get('lang')||'it',
     subs:url.searchParams.get('subs')||'none',
-    fallbackUrl:url.searchParams.get('fallbackUrl')||''
+    fallbackUrl:url.searchParams.get('fallbackUrl')||'',
+    provider:url.searchParams.get('provider')||url.searchParams.get('source')||'',
+    source:url.searchParams.get('source')||url.searchParams.get('provider')||''
   };
   if(!id)return json({ok:false,error:'missing id'},400,env);
   if(kind==='movie'){
-    const providers=getEnvList(env,'MOVIE_PROVIDERS',DEFAULTS.movieProviders);
+    const requested=ctx.provider||ctx.source;
+    const providers=movieProviderMap[requested]?[requested]:getEnvList(env,'MOVIE_PROVIDERS',DEFAULTS.movieProviders);
     return json(await firstWorking(providers,movieProviderMap,ctx,env),200,env);
   }
   if(kind==='tv'){
-    const providers=getEnvList(env,'TV_PROVIDERS',DEFAULTS.tvProviders);
+    const requested=ctx.provider||ctx.source;
+    const providers=tvProviderMap[requested]?[requested]:getEnvList(env,'TV_PROVIDERS',DEFAULTS.tvProviders);
     return json(await firstWorking(providers,tvProviderMap,ctx,env),200,env);
   }
   if(kind==='anime'){

@@ -16,6 +16,24 @@
   function apiBase(){return String(liveConfig().streamApiBase||'').replace(/\/$/,'');}
   function streamripBase(){return String(liveConfig().streamripBaseUrl||liveConfig().animeProviderBase||'https://streamrip-website-production.up.railway.app').replace(/\/$/,'');}
   function aniListApiBase(){return String(liveConfig().aniListApiBase||'https://graphql.anilist.co').replace(/\/$/,'');}
+  function isAppleTouchDevice(){
+    return /iPad|iPhone|iPod/i.test(navigator.userAgent||'')||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  }
+  function isMobileTouchDevice(){
+    const ua=navigator.userAgent||'';
+    const coarse=window.matchMedia?.('(pointer: coarse)')?.matches;
+    const mobileUA=/Mobi|Android|iPad|iPhone|iPod|Mobile|Tablet/i.test(ua);
+    const compact=Math.min(window.innerWidth||screen.width||0,window.innerHeight||screen.height||0)<=820;
+    return isAppleTouchDevice()||((navigator.maxTouchPoints||0)>0&&(mobileUA||coarse||compact));
+  }
+  function normalizePlaybackSource(src){
+    const cfg=liveConfig();
+    const value=String(src||'vixsrc');
+    const enabled=cfg.avoidUnstableMobileTouchSources??cfg.avoidUnstableAppleTouchSources;
+    const avoid=new Set(cfg.mobileTouchAvoidSources||cfg.appleTouchAvoidSources||['vixsrc','vidsrc']);
+    if(enabled!==false&&isMobileTouchDevice()&&avoid.has(value))return String(cfg.mobileTouchPreferredSource||cfg.appleTouchPreferredSource||'embed');
+    return value;
+  }
 
   function readJSON(key,fallback){
     try{return JSON.parse(localStorage.getItem(key)||'')||fallback;}catch(e){return fallback;}
@@ -91,7 +109,7 @@
   function embedMovie(id){return `https://embed.su/embed/movie/${id}`;}
   function embedTv(id,season,episode){return `https://embed.su/embed/tv/${id}/${season||1}/${episode||1}`;}
   function fallbackBySource(kind,params){
-    const src=params.provider||params.source||'vixsrc';
+    const src=normalizePlaybackSource(params.provider||params.source||'vixsrc');
     if(kind==='movie'){
       if(src==='vidsrc')return vidsrcMovie(params.id);
       if(src==='embed')return embedMovie(params.id);
@@ -210,10 +228,12 @@
   }
 
   async function getMovieStream(params){
+    params={...params,provider:normalizePlaybackSource(params?.provider||params?.source||'vixsrc'),source:normalizePlaybackSource(params?.source||params?.provider||'vixsrc')};
     const fallback=fallbackBySource('movie',params);
     return await callBackend('movie',params,fallback)||{ok:true,provider:params.provider||'vixsrc',embedUrl:fallback};
   }
   async function getSeriesStream(params){
+    params={...params,provider:normalizePlaybackSource(params?.provider||params?.source||'vixsrc'),source:normalizePlaybackSource(params?.source||params?.provider||'vixsrc')};
     const fallback=fallbackBySource('tv',params);
     return await callBackend('tv',params,fallback)||{ok:true,provider:params.provider||'vixsrc',embedUrl:fallback};
   }

@@ -1099,6 +1099,7 @@ function getEmbedUrl(id,type,season,episode,src,startSecs){
   if(isAnimeSource(src)){
     return window.StreamGNProviders?.getAnimeFallbackUrl?.({id,type,season:s,episode:e,flatEpisode:getAnimeFlatEpisode(s,e),title:playerSessionTitle,titles:playerSessionAnimeTitles})||'about:blank';
   }
+  src=normalizeSourceForDevice(src,false);
   if(src==='vixsrc-it'){
     const url=type==='tv'?`https://vixsrc.to/tv/${id}/${s}/${e}`:`https://vixsrc.to/movie/${id}`;
     const params=['hl=it','sl=it'];
@@ -1113,13 +1114,15 @@ function getEmbedUrl(id,type,season,episode,src,startSecs){
   return params.length?url+'?'+params.join('&'):url;
 }
 async function resolveStreamResult(id,type,season,episode,src,startSecs){
+  const anime=isAnimeSource(src);
+  src=normalizeSourceForDevice(src,anime);
   const s=season||1,e=episode||1,fallback=getEmbedUrl(id,type,s,e,src,startSecs),providers=window.StreamGNProviders;
   if(!providers)return {ok:!!fallback,embedUrl:fallback};
-  if(isAnimeSource(src))await ensureStreamRemoteConfig();
+  if(anime)await ensureStreamRemoteConfig();
   const payload={id:String(id),tmdbId:String(id),type,season:s,episode:e,title:playerSessionTitle,titles:playerSessionAnimeTitles,poster:playerSessionPoster,provider:src,source:src,startSecs,settings:loadSettings(),fallbackUrl:fallback};
-  if(isAnimeSource(src))payload.flatEpisode=getAnimeFlatEpisode(s,e);
+  if(anime)payload.flatEpisode=getAnimeFlatEpisode(s,e);
   try{
-    const result=isAnimeSource(src)
+    const result=anime
       ? await providers.getAnimeStream(payload)
       : type==='tv'
         ? await providers.getSeriesStream(payload)
@@ -1135,7 +1138,10 @@ async function setPlayerFrameSrc(id,type,season,episode,src,startSecs){
   const fr=document.getElementById('vix-frame');if(!fr)return;
   preparePlayerFrame(fr);
   persistOpenPlayerState('before-frame-src');
-  const seq=++playerStreamSeq,fallback=getEmbedUrl(id,type,season,episode,src,startSecs),providers=window.StreamGNProviders,anime=isAnimeSource(src);
+  const anime=isAnimeSource(src);
+  src=normalizeSourceForDevice(src,anime);
+  if(String(currentTvId)===String(id))currentSrc=src;
+  const seq=++playerStreamSeq,fallback=getEmbedUrl(id,type,season,episode,src,startSecs),providers=window.StreamGNProviders;
   if(anime)setFrameMessage(fr,'Caricamento episodio','Un attimo.');
   else{showIframePlayer(fr);fr.removeAttribute('srcdoc');setIframeSrcIfChanged(fr,providers?.hasBackend?.()?'about:blank':fallback);}
   const result=await withTimeout(resolveStreamResult(id,type,season,episode,src,startSecs),anime?12000:18000,'anime provider timeout');
