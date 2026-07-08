@@ -741,7 +741,10 @@ function requestPlayerRealProgress(){
 function persistEstimatedProgress(){return requestPlayerRealProgress();}
 function startPlayerAutoSave(){
   stopPlayerAutoSave(false);resetPlayerAutoClock();
-  playerAutoSaveTimer=setInterval(()=>requestPlayerRealProgress(),10000);
+  playerAutoSaveTimer=setInterval(()=>{
+    if(isPlayerOpen())rememberOpenPlayer('heartbeat');
+    requestPlayerRealProgress();
+  },10000);
 }
 function stopPlayerAutoSave(saveFirst=true){
   if(saveFirst)requestPlayerRealProgress();
@@ -1064,6 +1067,13 @@ function setIframeSrcIfChanged(frame,url){
   frame.src=next;
   return true;
 }
+function isUnstableMobilePlayerUrl(url){
+  if(!url||!isMobileTouchDevice())return false;
+  try{
+    const host=new URL(url,location.href).hostname;
+    return host==='vixsrc.to'||host.endsWith('.vixsrc.to')||host==='vidsrc.me'||host.endsWith('.vidsrc.me')||host==='vidsrc.xyz'||host.endsWith('.vidsrc.xyz')||host==='vidsrcme.ru'||host.endsWith('.vidsrcme.ru');
+  }catch(e){return false;}
+}
 function withTimeout(promise,ms,message='timeout'){
   let timer;
   const timeout=new Promise(resolve=>{timer=setTimeout(()=>resolve({ok:false,embedUrl:'',error:message}),ms);});
@@ -1130,7 +1140,11 @@ async function setPlayerFrameSrc(id,type,season,episode,src,startSecs){
   else{showIframePlayer(fr);fr.removeAttribute('srcdoc');setIframeSrcIfChanged(fr,providers?.hasBackend?.()?'about:blank':fallback);}
   const result=await withTimeout(resolveStreamResult(id,type,season,episode,src,startSecs),anime?12000:18000,'anime provider timeout');
   if(seq!==playerStreamSeq||String(currentTvId)!==String(id))return;
-  const url=result?.embedUrl||result?.iframeUrl||result?.url||fallback;
+  let url=result?.embedUrl||result?.iframeUrl||result?.url||fallback;
+  if(!anime&&isUnstableMobilePlayerUrl(url)){
+    currentSrc=normalizeSourceForDevice('embed',false);
+    url=getEmbedUrl(id,type,season,episode,currentSrc,startSecs);
+  }
   if(anime&&(!result?.ok||!isPlayablePlayerUrl(url,true))){
     setFrameMessage(fr,'Anime non disponibile','Non sono riuscito a trovare questo episodio.');
     return;
@@ -2053,6 +2067,7 @@ window.addEventListener('pageshow',e=>{
   restorePlayerAfterLifecycle(e.persisted?160:240);
 },{passive:true});
 window.addEventListener('orientationchange',()=>{
+  if(isPlayerOpen())rememberOpenPlayer('orientation');
   [80,360,900].forEach(ms=>setTimeout(()=>{syncViewportMetrics();requestReadableContrast();},ms));
 },{passive:true});
 document.addEventListener('freeze',saveLeavingState);
