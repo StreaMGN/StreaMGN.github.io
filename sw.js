@@ -5,14 +5,14 @@ const API='https://api.themoviedb.org/3';
 const DB_NAME='streamgn-db';
 const STORE='kv';
 const INTERVAL=6*60*60*1000;
-const BUILD='20260708-player16';
-const CACHE='streamgn-v59';
+const BUILD='20260708-player18';
+const CACHE='streamgn-v61';
 const SHELL=`./?v=${BUILD}`;
 const OFFLINE_CACHE='streamgn-offline-v1';
 const MAX_IMAGE_CACHE_ITEMS=180;
 const IMG='https://image.tmdb.org/t/p/w780';
 
-self.addEventListener('install',event=>{self.skipWaiting();event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll([SHELL,'./index.html','./favicon.ico',`./manifest.webmanifest?v=${BUILD}`,`./assets/styles.css?v=${BUILD}`,'./assets/config.js',`./assets/providers.js?v=${BUILD}`,`./assets/sport-data.js?v=${BUILD}`,`./assets/app.js?v=${BUILD}`,'./assets/remote-config.json','./assets/external-sites.json','./assets/streamgn-logo.png','./assets/icons/favicon-16.png','./assets/icons/favicon-32.png','./assets/icons/icon-96.png','./assets/icons/icon-120.png','./assets/icons/icon-144.png','./assets/icons/icon-152.png','./assets/icons/icon-167.png','./assets/icons/icon-180.png','./assets/icons/icon-192.png','./assets/icons/icon-256.png','./assets/icons/icon-384.png','./assets/icons/icon-512.png','./assets/icons/icon-maskable-512.png','./assets/icons/streamgn-social.png']).catch(()=>{})));});
+self.addEventListener('install',event=>{self.skipWaiting();event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll([SHELL,'./index.html','./favicon.ico',`./manifest.webmanifest?v=${BUILD}`,`./assets/styles.css?v=${BUILD}`,`./assets/config.js?v=${BUILD}`,`./assets/providers.js?v=${BUILD}`,`./assets/sport-data.js?v=${BUILD}`,`./assets/app.js?v=${BUILD}`,'./assets/remote-config.json','./assets/external-sites.json','./assets/streamgn-logo.png','./assets/icons/favicon-16.png','./assets/icons/favicon-32.png','./assets/icons/icon-96.png','./assets/icons/icon-120.png','./assets/icons/icon-144.png','./assets/icons/icon-152.png','./assets/icons/icon-167.png','./assets/icons/icon-180.png','./assets/icons/icon-192.png','./assets/icons/icon-256.png','./assets/icons/icon-384.png','./assets/icons/icon-512.png','./assets/icons/icon-maskable-512.png','./assets/icons/streamgn-social.png']).catch(()=>{})));});
 self.addEventListener('activate',event=>{event.waitUntil(Promise.all([self.clients.claim(),caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('streamgn-')&&k!==CACHE&&k!==OFFLINE_CACHE).map(k=>caches.delete(k)))),caches.open(OFFLINE_CACHE).then(cache=>trimCache(cache,MAX_IMAGE_CACHE_ITEMS))]));});
 async function fallbackResponse(request){
   const match=await caches.match(request);
