@@ -5,18 +5,20 @@ const API='https://api.themoviedb.org/3';
 const DB_NAME='streamgn-db';
 const STORE='kv';
 const INTERVAL=6*60*60*1000;
-const CACHE='streamgn-v56';
+const BUILD='20260708-player14';
+const CACHE='streamgn-v57';
+const SHELL=`./?v=${BUILD}`;
 const OFFLINE_CACHE='streamgn-offline-v1';
 const MAX_IMAGE_CACHE_ITEMS=180;
 const IMG='https://image.tmdb.org/t/p/w780';
 
-self.addEventListener('install',event=>{self.skipWaiting();event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(['./','./index.html','./favicon.ico','./manifest.webmanifest','./assets/styles.css?v=20260708-player13','./assets/config.js','./assets/providers.js?v=20260708-player13','./assets/sport-data.js?v=20260708-player13','./assets/app.js?v=20260708-player13','./assets/remote-config.json','./assets/external-sites.json','./assets/streamgn-logo.png','./assets/icons/favicon-16.png','./assets/icons/favicon-32.png','./assets/icons/icon-96.png','./assets/icons/icon-120.png','./assets/icons/icon-144.png','./assets/icons/icon-152.png','./assets/icons/icon-167.png','./assets/icons/icon-180.png','./assets/icons/icon-192.png','./assets/icons/icon-256.png','./assets/icons/icon-384.png','./assets/icons/icon-512.png','./assets/icons/icon-maskable-512.png','./assets/icons/streamgn-social.png']).catch(()=>{})));});
+self.addEventListener('install',event=>{self.skipWaiting();event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll([SHELL,'./index.html','./favicon.ico',`./manifest.webmanifest?v=${BUILD}`,`./assets/styles.css?v=${BUILD}`,'./assets/config.js',`./assets/providers.js?v=${BUILD}`,`./assets/sport-data.js?v=${BUILD}`,`./assets/app.js?v=${BUILD}`,'./assets/remote-config.json','./assets/external-sites.json','./assets/streamgn-logo.png','./assets/icons/favicon-16.png','./assets/icons/favicon-32.png','./assets/icons/icon-96.png','./assets/icons/icon-120.png','./assets/icons/icon-144.png','./assets/icons/icon-152.png','./assets/icons/icon-167.png','./assets/icons/icon-180.png','./assets/icons/icon-192.png','./assets/icons/icon-256.png','./assets/icons/icon-384.png','./assets/icons/icon-512.png','./assets/icons/icon-maskable-512.png','./assets/icons/streamgn-social.png']).catch(()=>{})));});
 self.addEventListener('activate',event=>{event.waitUntil(Promise.all([self.clients.claim(),caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('streamgn-')&&k!==CACHE&&k!==OFFLINE_CACHE).map(k=>caches.delete(k)))),caches.open(OFFLINE_CACHE).then(cache=>trimCache(cache,MAX_IMAGE_CACHE_ITEMS))]));});
 async function fallbackResponse(request){
   const match=await caches.match(request);
   if(match)return match;
   if(request.mode==='navigate'){
-    const shell=await caches.match('./index.html');
+    const shell=await caches.match(SHELL)||await caches.match('./index.html');
     if(shell)return shell;
   }
   return new Response('',{status:504,statusText:'Offline'});
@@ -31,6 +33,22 @@ async function trimCache(cache,maxItems){
 self.addEventListener('fetch',event=>{
   if(event.request.method!=='GET')return;
   const url=new URL(event.request.url);
+  if(url.origin===self.location.origin&&event.request.mode==='navigate'){
+    event.respondWith((async()=>{
+      try{
+        const res=await fetch(event.request,{cache:'reload'});
+        if(res?.ok)caches.open(CACHE).then(cache=>cache.put(SHELL,res.clone())).catch(()=>{});
+        return res;
+      }catch(e){
+        return fallbackResponse(event.request);
+      }
+    })());
+    return;
+  }
+  if(url.origin===self.location.origin){
+    event.respondWith(fetch(event.request,{cache:'reload'}).catch(()=>fallbackResponse(event.request)));
+    return;
+  }
   if(url.hostname==='image.tmdb.org'){
     event.respondWith((async()=>{
       const cache=await caches.open(OFFLINE_CACHE);
@@ -186,7 +204,10 @@ async function checkUpdates(force=false){
 
 self.addEventListener('periodicsync',event=>{if(event.tag==='streamgn-updates')event.waitUntil(checkUpdates(false));});
 self.addEventListener('sync',event=>{if(event.tag==='streamgn-updates')event.waitUntil(checkUpdates(false));});
-self.addEventListener('message',event=>{if(event.data?.type==='CHECK_UPDATES')event.waitUntil(checkUpdates(false));});
+self.addEventListener('message',event=>{
+  if(event.data?.type==='SKIP_WAITING'){self.skipWaiting();return;}
+  if(event.data?.type==='CHECK_UPDATES')event.waitUntil(checkUpdates(false));
+});
 self.addEventListener('push',event=>{
   event.waitUntil((async()=>{
     let payload=null;

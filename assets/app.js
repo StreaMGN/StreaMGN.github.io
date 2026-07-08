@@ -1,5 +1,8 @@
 'use strict';
 const CONFIG=window.STREAMGN_CONFIG||{};
+const APP_BUILD='20260708-player14';
+const APP_CACHE='streamgn-v57';
+const SW_URL=`./sw.js?v=${APP_BUILD}`;
 const TMDB_KEY=CONFIG.tmdbKey||'';
 const IMG=CONFIG.images?.poster||'https://image.tmdb.org/t/p/w342',IMG_W=CONFIG.images?.posterWide||'https://image.tmdb.org/t/p/w780',BIG=CONFIG.images?.backdrop||'https://image.tmdb.org/t/p/w1280',ORIG=CONFIG.images?.original||'https://image.tmdb.org/t/p/original',FACE=CONFIG.images?.face||'https://image.tmdb.org/t/p/w185',STILL=CONFIG.images?.still||'https://image.tmdb.org/t/p/w300';
 const API=CONFIG.apiBase||'https://api.themoviedb.org/3';
@@ -3033,7 +3036,37 @@ function showNotifPermissionPrompt(force=false){
 async function registerNotificationWorker(){
   if(!('serviceWorker' in navigator)||location.protocol==='file:')return;
   try{
-    const reg=await navigator.serviceWorker.register('./sw.js');
+    if('caches' in window){
+      try{
+        const keys=await caches.keys();
+        await Promise.all(keys.filter(key=>key.startsWith('streamgn-')&&key!==APP_CACHE&&key!=='streamgn-offline-v1').map(key=>caches.delete(key)));
+      }catch(e){}
+    }
+    let reloadingForUpdate=false;
+    navigator.serviceWorker.addEventListener('controllerchange',()=>{
+      if(reloadingForUpdate)return;
+      reloadingForUpdate=true;
+      if(isPlayerOpen()){
+        rememberOpenPlayer('worker-update');
+        return;
+      }
+      try{
+        const key=`svx_reloaded_${APP_BUILD}`;
+        if(sessionStorage.getItem(key))return;
+        sessionStorage.setItem(key,'1');
+      }catch(e){}
+      location.replace(location.href);
+    },{once:true});
+    const reg=await navigator.serviceWorker.register(SW_URL,{updateViaCache:'none'});
+    reg.addEventListener('updatefound',()=>{
+      const worker=reg.installing;
+      if(!worker)return;
+      worker.addEventListener('statechange',()=>{
+        if(worker.state==='installed'&&navigator.serviceWorker.controller)worker.postMessage({type:'SKIP_WAITING'});
+      });
+    });
+    if(reg.waiting)reg.waiting.postMessage({type:'SKIP_WAITING'});
+    try{await reg.update();}catch(e){}
     if('sync' in reg)try{await reg.sync.register('streamgn-updates');}catch(e){}
     if('periodicSync' in reg&&navigator.permissions){
       const status=await navigator.permissions.query({name:'periodic-background-sync'});

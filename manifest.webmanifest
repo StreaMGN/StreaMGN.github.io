@@ -3,7 +3,7 @@
   "name": "StreaMGN",
   "short_name": "StreaMGN",
   "description": "StreaMGN",
-  "start_url": "./",
+  "start_url": "./?v=20260708-player14",
   "scope": "./",
   "display": "standalone",
   "background_color": "#000000",
