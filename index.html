@@ -41,7 +41,7 @@
 <link rel="apple-touch-icon" sizes="167x167" href="assets/icons/icon-167.png">
 <link rel="apple-touch-icon" sizes="152x152" href="assets/icons/icon-152.png">
 <link rel="apple-touch-icon" sizes="120x120" href="assets/icons/icon-120.png">
-<link rel="manifest" href="manifest.webmanifest?v=20260708-player14">
+<link rel="manifest" href="manifest.webmanifest?v=20260708-player15">
 <title>StreaMGN</title>
 <script>
 (() => {
@@ -55,8 +55,62 @@
     document.documentElement.dataset.themeChoice = choice;
   } catch (e) {}
 })();
+(() => {
+  try {
+    const FLAG = 'sgnPlayer';
+    const now = Date.now();
+    const current = new URLSearchParams(location.hash ? location.hash.slice(1) : '');
+    const mobileTouch = /Mobi|Android|iPad|iPhone|iPod|Mobile|Tablet/i.test(navigator.userAgent || '') ||
+      ((navigator.maxTouchPoints || 0) > 0 && Math.min(innerWidth || screen.width || 0, innerHeight || screen.height || 0) <= 820);
+    const normalizeSrc = (src, anime) => {
+      const value = String(src || '').trim();
+      if (!anime && mobileTouch && (value === 'vixsrc' || value === 'vidsrc' || value === 'vixsrc-it')) return 'embed';
+      return value || (anime ? 'streamrip' : 'embed');
+    };
+    const closed = JSON.parse(localStorage.getItem('svx_player_closed') || 'null');
+    if (closed && now - Number(closed.closedAt || 0) < 10 * 60 * 1000) return;
+    const routeFrom = raw => {
+      if (!raw || !raw.open || !raw.id) return null;
+      const savedAt = Number(raw.updatedAt || raw.savedAt || 0);
+      const reopenUntil = Number(raw.reopenUntil || 0);
+      if (reopenUntil && reopenUntil < now) return null;
+      if (!reopenUntil && savedAt && now - savedAt > 30 * 60 * 1000) return null;
+      const p = new URLSearchParams();
+      const anime = !!raw.isAnime || !!raw.anime;
+      p.set(FLAG, '1');
+      p.set('id', String(raw.id));
+      p.set('type', String(raw.type || 'movie') === 'tv' ? 'tv' : 'movie');
+      p.set('title', String(raw.title || 'StreaMGN'));
+      if (raw.poster) p.set('poster', String(raw.poster));
+      if (raw.season) p.set('season', String(raw.season));
+      if (raw.episode) p.set('episode', String(raw.episode));
+      if (anime) p.set('anime', '1');
+      p.set('src', normalizeSrc(raw.src, anime));
+      p.set('page', String(raw.page || 'home'));
+      p.set('ts', String(savedAt || now));
+      return p.toString();
+    };
+    if (current.get(FLAG) === '1') {
+      const normalized = normalizeSrc(current.get('src'), current.get('anime') === '1');
+      if (current.get('src') !== normalized) {
+        current.set('src', normalized);
+        const url = new URL(location.href);
+        url.hash = current.toString();
+        history.replaceState(history.state || {}, '', url);
+      }
+      return;
+    }
+    const backup = JSON.parse(localStorage.getItem('svx_player_resume') || 'null');
+    const nav = JSON.parse(localStorage.getItem('svx_nav_state') || 'null');
+    const route = routeFrom(backup) || routeFrom({ ...(nav && nav.player ? nav.player : {}), page: nav && nav.page, updatedAt: nav && nav.updatedAt });
+    if (!route) return;
+    const url = new URL(location.href);
+    url.hash = route;
+    history.replaceState({ ...(history.state || {}), streamgnPlayer: Object.fromEntries(new URLSearchParams(route)) }, '', url);
+  } catch (e) {}
+})();
 </script>
-<link rel="stylesheet" href="assets/styles.css?v=20260708-player14">
+<link rel="stylesheet" href="assets/styles.css?v=20260708-player15">
 </head>
 <body>
 
@@ -363,8 +417,8 @@
   </div>
 </div>
 <script src="assets/config.js"></script>
-<script src="assets/providers.js?v=20260708-player14"></script>
-<script src="assets/sport-data.js?v=20260708-player14"></script>
-<script src="assets/app.js?v=20260708-player14"></script>
+<script src="assets/providers.js?v=20260708-player15"></script>
+<script src="assets/sport-data.js?v=20260708-player15"></script>
+<script src="assets/app.js?v=20260708-player15"></script>
 </body>
 </html>

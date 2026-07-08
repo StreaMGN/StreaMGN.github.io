@@ -1,7 +1,8 @@
 'use strict';
 const CONFIG=window.STREAMGN_CONFIG||{};
-const APP_BUILD='20260708-player14';
-const APP_CACHE='streamgn-v57';
+const APP_BUILD='20260708-player15';
+window.STREAMGN_BUILD=APP_BUILD;
+const APP_CACHE='streamgn-v58';
 const SW_URL=`./sw.js?v=${APP_BUILD}`;
 const TMDB_KEY=CONFIG.tmdbKey||'';
 const IMG=CONFIG.images?.poster||'https://image.tmdb.org/t/p/w342',IMG_W=CONFIG.images?.posterWide||'https://image.tmdb.org/t/p/w780',BIG=CONFIG.images?.backdrop||'https://image.tmdb.org/t/p/w1280',ORIG=CONFIG.images?.original||'https://image.tmdb.org/t/p/original',FACE=CONFIG.images?.face||'https://image.tmdb.org/t/p/w185',STILL=CONFIG.images?.still||'https://image.tmdb.org/t/p/w300';
