@@ -1741,6 +1741,7 @@ function getPreferredSource(id,type,season,episode,isAnime,fallback){
   const choices=orderSourcesForDevice(list);
   if(prefs[key]&&choices.includes(prefs[key])&&!bad[prefs[key]])return prefs[key];
   if(fallback&&choices.includes(fallback)&&!bad[fallback])return fallback;
+  if(isMobileTouchDevice()&&!isAnime)return choices.find(src=>!bad[src])||choices[0]||list[0];
   return choices.find(src=>!bad[src])||list.find(src=>!bad[src])||list[0];
 }
 function setPreferredSource(id,type,season,episode,src){
