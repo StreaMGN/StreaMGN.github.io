@@ -28,9 +28,9 @@
   }
   function normalizePlaybackSource(src){
     const cfg=liveConfig();
-    const value=String(src||'configured');
+    const value=String(src||'vixsrc');
     const enabled=cfg.avoidUnstableMobileTouchSources??cfg.avoidUnstableAppleTouchSources;
-    const avoid=new Set(cfg.mobileTouchAvoidSources||cfg.appleTouchAvoidSources||[]);
+    const avoid=new Set(cfg.mobileTouchAvoidSources||cfg.appleTouchAvoidSources||['vixsrc','vidsrc']);
     if(enabled!==false&&isMobileTouchDevice()&&avoid.has(value))return String(cfg.mobileTouchPreferredSource||cfg.appleTouchPreferredSource||'embed');
     return value;
   }
@@ -98,8 +98,41 @@
       return cleanResult(await r.json(),fallbackUrl);
     }catch(e){return null;}finally{request.dispose();}
   }
+  function vixsrcMovie(id,startSecs,settings={}){
+    const params=new URLSearchParams();
+    const lang=settings.lang||'it',subs=settings.subs||'none';
+    if(lang&&lang!=='original')params.set('hl',lang);
+    if(subs&&subs!=='none')params.set('sl',subs);
+    addResumeParams(params,startSecs);
+    const qs=params.toString();
+    return `https://vixsrc.to/movie/${id}${qs?'?'+qs:''}`;
+  }
+  function vixsrcTv(id,season,episode,startSecs,settings={}){
+    const params=new URLSearchParams();
+    const lang=settings.lang||'it',subs=settings.subs||'none';
+    if(lang&&lang!=='original')params.set('hl',lang);
+    if(subs&&subs!=='none')params.set('sl',subs);
+    addResumeParams(params,startSecs);
+    const qs=params.toString();
+    return `https://vixsrc.to/tv/${id}/${season||1}/${episode||1}${qs?'?'+qs:''}`;
+  }
+  function vidsrcMovie(id){return `https://vidsrc.me/embed/movie?tmdb=${id}`;}
+  function vidsrcTv(id,season,episode){return `https://vidsrc.me/embed/tv?tmdb=${id}&season=${season||1}&episode=${episode||1}`;}
+  function embedMovie(id){return `https://embed.su/embed/movie/${id}`;}
+  function embedTv(id,season,episode){return `https://embed.su/embed/tv/${id}/${season||1}/${episode||1}`;}
   function fallbackBySource(kind,params){
-    return params.fallbackUrl||'';
+    const src=normalizePlaybackSource(params.provider||params.source||'vixsrc');
+    if(kind==='movie'){
+      if(src==='vidsrc')return vidsrcMovie(params.id);
+      if(src==='embed')return embedMovie(params.id);
+      return vixsrcMovie(params.id,params.startSecs,params.settings);
+    }
+    if(kind==='tv'){
+      if(src==='vidsrc')return vidsrcTv(params.id,params.season,params.episode);
+      if(src==='embed')return embedTv(params.id,params.season,params.episode);
+      return vixsrcTv(params.id,params.season,params.episode,params.startSecs,params.settings);
+    }
+    return params.fallbackUrl||'about:blank';
   }
 
   function normalizeTitle(value){
@@ -210,14 +243,14 @@
   }
 
   async function getMovieStream(params={},options={}){
-    params={...params,provider:normalizePlaybackSource(params?.provider||params?.source||'configured'),source:normalizePlaybackSource(params?.source||params?.provider||'configured')};
+    params={...params,provider:normalizePlaybackSource(params?.provider||params?.source||'vixsrc'),source:normalizePlaybackSource(params?.source||params?.provider||'vixsrc')};
     const fallback=fallbackBySource('movie',params);
-    return await callBackend('movie',params,fallback,options)||{ok:false,provider:params.provider||'configured',embedUrl:fallback,error:'no configured stream'};
+    return await callBackend('movie',params,fallback,options)||{ok:true,provider:params.provider||'vixsrc',embedUrl:fallback};
   }
   async function getSeriesStream(params={},options={}){
-    params={...params,provider:normalizePlaybackSource(params?.provider||params?.source||'configured'),source:normalizePlaybackSource(params?.source||params?.provider||'configured')};
+    params={...params,provider:normalizePlaybackSource(params?.provider||params?.source||'vixsrc'),source:normalizePlaybackSource(params?.source||params?.provider||'vixsrc')};
     const fallback=fallbackBySource('tv',params);
-    return await callBackend('tv',params,fallback,options)||{ok:false,provider:params.provider||'configured',embedUrl:fallback,error:'no configured stream'};
+    return await callBackend('tv',params,fallback,options)||{ok:true,provider:params.provider||'vixsrc',embedUrl:fallback};
   }
   async function getAnimeStream(params={},options={}){
     const anilistId=await resolveAniListId(params,options);

@@ -32,25 +32,25 @@ function loadProviders(config = {}, fetchImpl = async () => ({ ok: false })) {
 
 const providerSource = await readProjectFile('assets/providers.js');
 
-test('normal playback shows the app message before provider resolution when no fallback is configured', async () => {
+test('normal playback has an immediate fallback before provider resolution', async () => {
   const appSource = await readProjectFile('assets/app.js');
   const playerStart = appSource.indexOf('async function setPlayerFrameSrc');
   const playerEnd = appSource.indexOf('\n/* TRAILERS */', playerStart);
   const playerCode = appSource.slice(playerStart, playerEnd);
-  const loadingMessage = playerCode.indexOf("setFrameMessage(fr,'Caricamento player'");
+  const fallbackWrite = playerCode.indexOf('setIframeSrcIfChanged(fr,fallback);');
   const providerAwait = playerCode.indexOf('await withTimeout(resolveStreamResult');
 
-  assert.ok(loadingMessage >= 0, 'the app must show a loading message instead of a third-party fallback');
-  assert.ok(providerAwait > loadingMessage, 'the message must be visible before waiting for the provider');
+  assert.ok(fallbackWrite >= 0, 'the fallback must be assigned to the iframe');
+  assert.ok(providerAwait > fallbackWrite, 'the fallback must load before waiting for the provider');
   assert.doesNotMatch(playerCode.slice(0, providerAwait), /about:blank/);
 });
 
-test('provider returns no public fallback when no backend is configured', async () => {
+test('provider uses its standard URL when no backend is configured', async () => {
   const providers = loadProviders();
   const result = await providers.getMovieStream({ id: '157336', type: 'movie' });
 
-  assert.equal(result.ok, false);
-  assert.equal(result.embedUrl, '');
+  assert.equal(result.ok, true);
+  assert.equal(result.embedUrl, 'https://vixsrc.to/movie/157336?hl=it');
 });
 
 test('cancelling a backend request returns the fallback without leaving a pending fetch', async () => {
@@ -69,7 +69,7 @@ test('cancelling a backend request returns the fallback without leaving a pendin
   const result = await resultPromise;
 
   assert.equal(receivedSignal.aborted, true);
-  assert.equal(result.embedUrl, '');
+  assert.equal(result.embedUrl, 'https://vixsrc.to/movie/157336?hl=it');
 });
 
 test('all PWA entry points reference the same player build', async () => {
@@ -81,6 +81,6 @@ test('all PWA entry points reference the same player build', async () => {
   ]);
 
   for (const source of [app, html, manifest, worker]) {
-    assert.match(source, /20260804-player20/);
+    assert.match(source, /20260804-player19/);
   }
 });
