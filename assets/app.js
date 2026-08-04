@@ -1,6 +1,6 @@
 'use strict';
 const CONFIG=window.STREAMGN_CONFIG||{};
-const APP_BUILD='20260804-player19';
+const APP_BUILD='20260804-player20';
 window.STREAMGN_BUILD=APP_BUILD;
 const APP_CACHE='streamgn-v62';
 const SW_URL=`./sw.js?v=${APP_BUILD}`;
@@ -23,9 +23,9 @@ let playerSessionAnimeTitles=[],currentDetailAnimeTitles=[],playerSessionSeasons
 let profileStatsCache=null,calendarEntriesCache=[];
 let animeExternalUrl='',sportWatchUrl='',sportRefreshTimer=null;
 const sportState={data:null,selectedSport:'all',query:'',status:'all',competition:'',date:'',eventsById:new Map(),loading:false};
-const SOURCE_LABELS={vixsrc:'VixSrc',vidsrc:'VidSrc',embed:'Embed.su',anime:'Streamrip',streamrip:'Streamrip'};
+const SOURCE_LABELS={configured:'Player configurato',anime:'Streamrip',streamrip:'Streamrip'};
 function sourceListFromConfig(kind,fallback){return (CONFIG.streamUiSources?.[kind]||fallback).map(id=>({id,label:SOURCE_LABELS[id]||id}));}
-const SOURCES_NORMAL=sourceListFromConfig('normal',['vixsrc','vidsrc','embed']);
+const SOURCES_NORMAL=sourceListFromConfig('normal',['configured']);
 const SOURCES_ANIME=sourceListFromConfig('anime',['anime']);
 function isAppleTouchDevice(){
   return /iPad|iPhone|iPod/i.test(navigator.userAgent||'')||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
@@ -38,7 +38,7 @@ function isMobileTouchDevice(){
   return isAppleTouchDevice()||((navigator.maxTouchPoints||0)>0&&(mobileUA||coarse||compact));
 }
 function mobileTouchAvoidSources(){
-  return new Set(CONFIG.mobileTouchAvoidSources||CONFIG.appleTouchAvoidSources||['vixsrc','vidsrc']);
+  return new Set(CONFIG.mobileTouchAvoidSources||CONFIG.appleTouchAvoidSources||[]);
 }
 function shouldAvoidSourceOnDevice(src){
   const enabled=CONFIG.avoidUnstableMobileTouchSources??CONFIG.avoidUnstableAppleTouchSources;
@@ -57,7 +57,7 @@ function normalizeSourceForDevice(src,isAnime=false){
   const choices=orderSourcesForDevice(list);
   const value=String(src||'');
   if(value&&choices.includes(value))return value;
-  return choices[0]||list[0]||value||'vixsrc';
+  return choices[0]||list[0]||value||'configured';
 }
 currentSrc=normalizeSourceForDevice('',false);
 const SPORT_DEFAULT_URL=CONFIG.sportDefaultUrl||'https://pepperstream.xyz';
@@ -197,7 +197,7 @@ function playerNavSnapshot(open=document.getElementById('player-modal')?.classLi
 function playerRouteSignature(raw){
   const p=normalizePlayerSnapshot(raw);
   if(!p?.id)return'';
-  return [p.id,p.type,p.season||'',p.episode||'',p.isAnime?'anime':'std',p.src||'vixsrc'].join('|');
+  return [p.id,p.type,p.season||'',p.episode||'',p.isAnime?'anime':'std',p.src||'configured'].join('|');
 }
 function markPlayerExplicitlyClosed(snapshot=playerNavSnapshot(true)){
   const p=normalizePlayerSnapshot(snapshot,false);
@@ -1094,6 +1094,12 @@ function isUnstableMobilePlayerUrl(url){
     return host==='vixsrc.to'||host.endsWith('.vixsrc.to')||host==='vidsrc.me'||host.endsWith('.vidsrc.me')||host==='vidsrc.xyz'||host.endsWith('.vidsrc.xyz')||host==='vidsrcme.ru'||host.endsWith('.vidsrcme.ru');
   }catch(e){return false;}
 }
+function isUnsupportedEmbeddedProviderUrl(url){
+  try{
+    const host=new URL(url,location.href).hostname.toLowerCase();
+    return host==='vixsrc.to'||host.endsWith('.vixsrc.to')||host==='vidsrc.me'||host.endsWith('.vidsrc.me')||host==='vidsrc.xyz'||host.endsWith('.vidsrc.xyz')||host==='embed.su'||host.endsWith('.embed.su');
+  }catch(e){return false;}
+}
 function withTimeout(promise,ms,message='timeout'){
   let timer;
   const timeout=new Promise(resolve=>{timer=setTimeout(()=>resolve({ok:false,embedUrl:'',error:message}),ms);});
@@ -1133,18 +1139,7 @@ function getEmbedUrl(id,type,season,episode,src,startSecs){
     return window.StreamGNProviders?.getAnimeFallbackUrl?.({id,type,season:s,episode:e,flatEpisode:getAnimeFlatEpisode(s,e),title:playerSessionTitle,titles:playerSessionAnimeTitles})||'about:blank';
   }
   src=normalizeSourceForDevice(src,false);
-  if(src==='vixsrc-it'){
-    const url=type==='tv'?`https://vixsrc.to/tv/${id}/${s}/${e}`:`https://vixsrc.to/movie/${id}`;
-    const params=['hl=it','sl=it'];
-    addResumeParams(params,startSecs);
-    return url+'?'+params.join('&');
-  }
-  if(src==='vidsrc')return type==='tv'?`https://vidsrc.me/embed/tv?tmdb=${id}&season=${s}&episode=${e}`:`https://vidsrc.me/embed/movie?tmdb=${id}`;
-  if(src==='embed')return type==='tv'?`https://embed.su/embed/tv/${id}/${s}/${e}`:`https://embed.su/embed/movie/${id}`;
-  let url=type==='tv'?`https://vixsrc.to/tv/${id}/${s}/${e}`:`https://vixsrc.to/movie/${id}`;
-  const cfg=loadSettings(),lang=cfg.lang||'it',subs=cfg.subs||'none',params=[];
-  if(lang&&lang!=='original')params.push(`hl=${lang}`);if(subs&&subs!=='none')params.push(`sl=${subs}`);addResumeParams(params,startSecs);
-  return params.length?url+'?'+params.join('&'):url;
+  return '';
 }
 async function resolveStreamResult(id,type,season,episode,src,startSecs,options={}){
   const anime=isAnimeSource(src);
@@ -1176,7 +1171,8 @@ async function setPlayerFrameSrc(id,type,season,episode,src,startSecs){
   if(String(currentTvId)===String(id))currentSrc=src;
   const {seq,signal}=beginPlayerStream(),fallback=getEmbedUrl(id,type,season,episode,src,startSecs);
   if(anime)setFrameMessage(fr,'Caricamento episodio','Un attimo.');
-  else{showIframePlayer(fr);fr.removeAttribute('srcdoc');setIframeSrcIfChanged(fr,fallback);}
+  else if(fallback){showIframePlayer(fr);fr.removeAttribute('srcdoc');setIframeSrcIfChanged(fr,fallback);}
+  else setFrameMessage(fr,'Caricamento player','Connessione al servizio autorizzato in corso.');
   try{
     const result=await withTimeout(resolveStreamResult(id,type,season,episode,src,startSecs,{signal}),anime?12000:18000,'anime provider timeout');
     if(seq!==playerStreamSeq||String(currentTvId)!==String(id))return;
@@ -1185,8 +1181,8 @@ async function setPlayerFrameSrc(id,type,season,episode,src,startSecs){
       currentSrc=normalizeSourceForDevice('embed',false);
       url=getEmbedUrl(id,type,season,episode,currentSrc,startSecs);
     }
-    if(anime&&(!result?.ok||!isPlayablePlayerUrl(url,true))){
-      setFrameMessage(fr,'Anime non disponibile','Non sono riuscito a trovare questo episodio.');
+    if(!result?.ok||!isPlayablePlayerUrl(url,anime)||isUnsupportedEmbeddedProviderUrl(url)){
+      setFrameMessage(fr,anime?'Anime non disponibile':'Contenuto non disponibile',anime?'Non sono riuscito a trovare questo episodio.':'Il player autorizzato non ha restituito una sorgente valida.');
       return;
     }
     if(isDirectVideoUrl(url)&&setNativeVideoSrc(url,startSecs))return;
@@ -1976,7 +1972,11 @@ async function openPlayer(id,type,title,poster,season,episode,isAnime){
     return;
   }
   removeJSONKey(PLAYER_CLOSED_KEY);
-  currentIsAnime=resolvedAnime;currentSrc=getPreferredSource(id,type,initialS,initialE,resolvedAnime,resolvedAnime?'streamrip':'vixsrc');currentTvId=String(id);document.getElementById('pm-title').textContent=title;document.getElementById('anime-note').style.display='none';buildSrcToggle(resolvedAnime);autoAddToWatching({id:String(id),type,title,poster:poster||'',isAnime:resolvedAnime});
+  if(!window.StreamGNProviders?.hasBackend?.()){
+    openOfficialWatchPrompt(id,type,title,initialS,initialE);
+    return;
+  }
+  currentIsAnime=resolvedAnime;currentSrc=getPreferredSource(id,type,initialS,initialE,resolvedAnime,resolvedAnime?'streamrip':'configured');currentTvId=String(id);document.getElementById('pm-title').textContent=title;document.getElementById('anime-note').style.display='none';buildSrcToggle(resolvedAnime);autoAddToWatching({id:String(id),type,title,poster:poster||'',isAnime:resolvedAnime});
   playerProgId=String(id);playerProgType=type;playerProgSeason=type==='tv'?Number(initialS):null;playerProgEpisode=type==='tv'?Number(initialE):null;playerNoteSavedThisSession=true;playerSessionTitle=title;playerSessionPoster=poster||'';playerSessionIsAnime=resolvedAnime;playerSessionAnimeTitles=resolvedAnime?uniqueTextList([title,...(currentDetailId===String(id)?currentDetailAnimeTitles:[])]):[];playerSessionSeasons=[];playerLastAutoSecs=0;playerLastAutoSaveAt=0;stopPlayerAutoSave(false);hideReminderOverlay();document.getElementById('pm-note-bar').classList.remove('highlight');updateDeviceMediaSession(title,type,poster,season,episode);startPlayerStateHeartbeat('open-player');
   if(type==='tv'){
     setPlayerTvControlsVisible(true);
@@ -2449,6 +2449,25 @@ async function openExternalWatchPrompt(kind,opts={}){
   if(titleEl)titleEl.textContent=isAnime?`Continua su AnimeUnity${opts.title?` · ${opts.title}${ep}`:''}`:`Continua sul sito originale`;
   if(subEl)subEl.textContent=isAnime?'StreaMGN ti aiuta a scoprire, salvare e tenere traccia degli episodi. La visione si apre sul sito originale in una nuova scheda.':'La visione sportiva si apre fuori da StreaMGN, senza iframe o player incorporati.';
   if(open){open.href=url;open.textContent=isAnime?'Apri AnimeUnity':'Apri fuori';}
+  modal.classList.add('open');
+  lockBodyScroll();
+}
+async function openOfficialWatchPrompt(id,type,title,season,episode){
+  const modal=document.getElementById('external-watch-modal');
+  const titleEl=document.getElementById('external-watch-title'),subEl=document.getElementById('external-watch-sub'),kicker=document.getElementById('external-watch-kicker'),open=document.getElementById('external-watch-open');
+  const query=encodeURIComponent(title||'');
+  let url=`https://www.justwatch.com/it/cerca?q=${query}`,names=[];
+  try{
+    const availability=await tmdb(`/${type}/${id}/watch/providers`);
+    const italy=availability?.results?.IT||{};
+    url=italy.link||url;
+    names=[...(italy.flatrate||[]),...(italy.ads||[]),...(italy.rent||[]),...(italy.buy||[])].map(p=>p.provider_name).filter(Boolean);
+  }catch(e){}
+  const ep=type==='tv'&&season&&episode?` · S${season}E${episode}`:'';
+  if(kicker)kicker.textContent='Disponibilità ufficiale';
+  if(titleEl)titleEl.textContent=`Dove guardare ${title||'questo contenuto'}${ep}`;
+  if(subEl)subEl.textContent=names.length?`Disponibile in Italia su ${[...new Set(names)].slice(0,4).join(', ')}. Apri la pagina ufficiale per vedere le opzioni aggiornate.`:'Apri la pagina ufficiale per verificare le opzioni disponibili in Italia.';
+  if(open){open.href=url;open.textContent='Vedi dove guardare';}
   modal.classList.add('open');
   lockBodyScroll();
 }

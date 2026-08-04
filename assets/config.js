@@ -23,19 +23,19 @@ window.STREAMGN_CONFIG = {
     sport: '/sport/live'
   },
   streamProviders: {
-    movie: ['vixsrc'],
-    tv: ['vixsrc'],
+    movie: ['configured'],
+    tv: ['configured'],
     anime: ['streamrip'],
     sport: ['configured']
   },
   streamUiSources: {
-    normal: ['vixsrc', 'vidsrc', 'embed'],
+    normal: ['configured'],
     anime: ['streamrip']
   },
-  mobileTouchPreferredSource: 'vixsrc',
+  mobileTouchPreferredSource: 'configured',
   mobileTouchAvoidSources: [],
   avoidUnstableMobileTouchSources: false,
-  appleTouchPreferredSource: 'vixsrc',
+  appleTouchPreferredSource: 'configured',
   appleTouchAvoidSources: [],
   avoidUnstableAppleTouchSources: false,
   streamripBaseUrl: 'https://streamrip-website-production.up.railway.app',
