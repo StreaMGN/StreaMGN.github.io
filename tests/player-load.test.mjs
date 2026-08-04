@@ -32,17 +32,17 @@ function loadProviders(config = {}, fetchImpl = async () => ({ ok: false })) {
 
 const providerSource = await readProjectFile('assets/providers.js');
 
-test('normal playback has an immediate fallback before provider resolution', async () => {
+test('initial TV playback waits for the selected episode path', async () => {
   const appSource = await readProjectFile('assets/app.js');
-  const playerStart = appSource.indexOf('async function setPlayerFrameSrc');
-  const playerEnd = appSource.indexOf('\n/* TRAILERS */', playerStart);
+  const playerStart = appSource.indexOf('async function openPlayer');
+  const playerEnd = appSource.indexOf('\nasync function loadEpisodesForPlayer', playerStart);
   const playerCode = appSource.slice(playerStart, playerEnd);
-  const fallbackWrite = playerCode.indexOf('setIframeSrcIfChanged(fr,fallback);');
-  const providerAwait = playerCode.indexOf('await withTimeout(resolveStreamResult');
+  const metadataLoad = playerCode.indexOf('await loadEpisodesForPlayer');
+  const selectedEpisodeLoad = playerCode.indexOf('loadSelectedTvEpisode(s,ep);');
 
-  assert.ok(fallbackWrite >= 0, 'the fallback must be assigned to the iframe');
-  assert.ok(providerAwait > fallbackWrite, 'the fallback must load before waiting for the provider');
-  assert.doesNotMatch(playerCode.slice(0, providerAwait), /about:blank/);
+  assert.ok(metadataLoad >= 0, 'the season episode list must load first');
+  assert.ok(selectedEpisodeLoad > metadataLoad, 'initial playback must use the same selected-episode flow as a manual change');
+  assert.doesNotMatch(playerCode, /setPlayerFrameSrc\(id,type,lastS,lastE/);
 });
 
 test('provider uses its standard URL when no backend is configured', async () => {
@@ -81,6 +81,6 @@ test('all PWA entry points reference the same player build', async () => {
   ]);
 
   for (const source of [app, html, manifest, worker]) {
-    assert.match(source, /20260804-player19/);
+    assert.match(source, /20260804-player20/);
   }
 });

@@ -1,8 +1,8 @@
 'use strict';
 const CONFIG=window.STREAMGN_CONFIG||{};
-const APP_BUILD='20260804-player19';
+const APP_BUILD='20260804-player20';
 window.STREAMGN_BUILD=APP_BUILD;
-const APP_CACHE='streamgn-v62';
+const APP_CACHE='streamgn-v63';
 const SW_URL=`./sw.js?v=${APP_BUILD}`;
 const TMDB_KEY=CONFIG.tmdbKey||'';
 const IMG=CONFIG.images?.poster||'https://image.tmdb.org/t/p/w342',IMG_W=CONFIG.images?.posterWide||'https://image.tmdb.org/t/p/w780',BIG=CONFIG.images?.backdrop||'https://image.tmdb.org/t/p/w1280',ORIG=CONFIG.images?.original||'https://image.tmdb.org/t/p/original',FACE=CONFIG.images?.face||'https://image.tmdb.org/t/p/w185',STILL=CONFIG.images?.still||'https://image.tmdb.org/t/p/w300';
@@ -1989,10 +1989,8 @@ async function openPlayer(id,type,title,poster,season,episode,isAnime){
     resetPanelScroll(playerModal);
     lockBodyScroll();
     const lastS=initialS,lastE=initialE,openSeq=++playerOpenSeq;
-    const initialProg=getProgress(id,type,lastS,lastE);
-    const initialSource=currentSrc;
     preparePlayerFrame();
-    setPlayerFrameSrc(id,type,lastS,lastE,initialSource,initialProg?initialProg.secs:0);
+    setFrameMessage(document.getElementById('vix-frame'),'Preparazione episodio','Imposto la stagione e l’episodio selezionati.');
     try{
       const show=await tmdb(`/tv/${id}`);
       if(openSeq!==playerOpenSeq||String(currentTvId)!==String(id))return;
@@ -2012,19 +2010,9 @@ async function openPlayer(id,type,title,poster,season,episode,isAnime){
     }
     if(openSeq!==playerOpenSeq||String(currentTvId)!==String(id))return;
     const s=sSel.value||lastS,ep=eSel.value||lastE;
-    playerProgSeason=Number(s);
-    playerProgEpisode=Number(ep);
-    syncPlayerPickers();
-    currentSrc=getPreferredSource(id,type,s,ep,resolvedAnime,currentSrc);
-    buildSrcToggle(resolvedAnime);
-    refreshNoteBar(id,type,s,ep);
     const prog=getProgress(id,type,s,ep);
-    const streamChanged=String(s)!==String(lastS)||String(ep)!==String(lastE)||currentSrc!==initialSource||Number(prog?.secs||0)!==Number(initialProg?.secs||0);
-    if(streamChanged)setPlayerFrameSrc(id,type,s,ep,currentSrc,prog?prog.secs:0);
+    loadSelectedTvEpisode(s,ep);
     startPlayerAutoSave(prog?prog.secs:0);
-    saveWatching(id,type,title,poster,s,ep);
-    updateNextEpisodeButton();
-    updateSourceState();
   }
   else{setPlayerTvControlsVisible(false);playerProgSeason=null;playerProgEpisode=null;refreshNoteBar(id,type,null,null);const prog=getProgress(id,type,null,null);preparePlayerFrame();setPlayerFrameSrc(id,type,null,null,currentSrc,prog?prog.secs:0);startPlayerAutoSave(prog?prog.secs:0);const playerModal=document.getElementById('player-modal');playerModal.classList.add('open');resetPanelScroll(playerModal);lockBodyScroll();saveWatching(id,type,title,poster,null,null);updateNextEpisodeButton();updateSourceState();}
   savePlayerNavState(true);
