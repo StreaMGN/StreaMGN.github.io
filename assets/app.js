@@ -1,8 +1,8 @@
 'use strict';
 const CONFIG=window.STREAMGN_CONFIG||{};
-const APP_BUILD='20260708-player18';
+const APP_BUILD='20260804-player20';
 window.STREAMGN_BUILD=APP_BUILD;
-const APP_CACHE='streamgn-v61';
+const APP_CACHE='streamgn-v63';
 const SW_URL=`./sw.js?v=${APP_BUILD}`;
 const TMDB_KEY=CONFIG.tmdbKey||'';
 const IMG=CONFIG.images?.poster||'https://image.tmdb.org/t/p/w342',IMG_W=CONFIG.images?.posterWide||'https://image.tmdb.org/t/p/w780',BIG=CONFIG.images?.backdrop||'https://image.tmdb.org/t/p/w1280',ORIG=CONFIG.images?.original||'https://image.tmdb.org/t/p/original',FACE=CONFIG.images?.face||'https://image.tmdb.org/t/p/w185',STILL=CONFIG.images?.still||'https://image.tmdb.org/t/p/w300';
@@ -17,7 +17,7 @@ const randomPools={serie:[],film:[],anime:[]};
 let activeFilterGenre={serie:null,film:null,anime:null},currentTrailerKey=null,epChangeTimer=null,listeFilter='all',listeSort='recent';
 let playerProgId=null,playerProgType=null,playerProgSeason=null,playerProgEpisode=null,playerNoteSavedThisSession=false;
 let playerSessionTitle='',playerSessionPoster='',playerSessionIsAnime=false,playerLastAutoSecs=0,playerLastAutoSaveAt=0,playerAutoSaveTimer=null,playerHasRealProgress=false,playerSourceHealthTimer=null;
-let playerStreamSeq=0;
+let playerStreamSeq=0,playerOpenSeq=0,playerStreamController=null;
 let playerRestoreTimer=0,playerStateHeartbeatTimer=0;
 let playerSessionAnimeTitles=[],currentDetailAnimeTitles=[],playerSessionSeasons=[];
 let profileStatsCache=null,calendarEntriesCache=[];
@@ -27,6 +27,64 @@ const SOURCE_LABELS={vixsrc:'VixSrc',vidsrc:'VidSrc',embed:'Embed.su',anime:'Str
 function sourceListFromConfig(kind,fallback){return (CONFIG.streamUiSources?.[kind]||fallback).map(id=>({id,label:SOURCE_LABELS[id]||id}));}
 const SOURCES_NORMAL=sourceListFromConfig('normal',['vixsrc','vidsrc','embed']);
 const SOURCES_ANIME=sourceListFromConfig('anime',['anime']);
+
+/* ============================================================
+   VIXSRC — AUTO-RIPRISTINO PRIMO CARICAMENTO
+   VixSrc e dietro Cloudflare. La primissima richiesta di una
+   sessione browser verso quel dominio puo tornare bloccata
+   ("Sorry, you have been blocked"), ma qualunque richiesta
+   successiva nella STESSA sessione funziona sempre — infatti
+   basta cambiare episodio per farlo ripartire. Per non far
+   vedere il blocco all'utente, replichiamo automaticamente
+   quello stesso comportamento: se il primo contenuto VixSrc
+   aperto in questa sessione non viene toccato dall'utente,
+   dopo un attimo ricarichiamo da sola la stessa pagina nello
+   stesso iframe — esattamente come un cambio episodio manuale,
+   ma automatico. Avviene UNA SOLA VOLTA per sessione, cosi non
+   interrompe mai le riproduzioni successive (che gia oggi
+   funzionano al primo colpo). Mentre questo primo tentativo e
+   in corso, un overlay copre l'iframe cosi l'eventuale pagina
+   di blocco non e mai visibile: si vede solo un caricamento,
+   che scompare quando il contenuto vero e pronto.
+   ============================================================ */
+const CF_GUARDED_SOURCES=new Set(['vixsrc','vixsrc-it']);
+function isCloudflareGuardedSource(src){return CF_GUARDED_SOURCES.has(src);}
+let cfSelfHealDone=false;
+let cfSelfHealTimer=0;
+let cfOverlayHideTimer=0;
+function showCfOverlay(){
+  const ov=document.getElementById('pm-cf-overlay');
+  if(ov)ov.hidden=false;
+}
+function hideCfOverlay(){
+  clearTimeout(cfOverlayHideTimer);
+  const ov=document.getElementById('pm-cf-overlay');
+  if(ov)ov.hidden=true;
+}
+function scheduleVixsrcSelfHeal(seq,id,type,season,episode,src,startSecs){
+  if(cfSelfHealDone){hideCfOverlay();return;}
+  cfSelfHealDone=true;
+  showCfOverlay();
+  clearTimeout(cfSelfHealTimer);
+  clearTimeout(cfOverlayHideTimer);
+  /* Se per qualsiasi motivo l'overlay restasse coperto troppo a lungo, lo togliamo comunque */
+  cfOverlayHideTimer=setTimeout(hideCfOverlay,4200);
+  cfSelfHealTimer=setTimeout(()=>{
+    if(seq!==playerStreamSeq||String(currentTvId)!==String(id)){hideCfOverlay();return;}
+    const fr=document.getElementById('vix-frame');
+    if(!fr||fr.style.display==='none'){hideCfOverlay();return;}
+    const base=getEmbedUrl(id,type,season,episode,src,startSecs);
+    if(!base||base==='about:blank'){hideCfOverlay();return;}
+    const bust=base+(base.includes('?')?'&':'?')+'_r='+Date.now().toString(36);
+    const onFreshLoad=()=>{
+      if(seq!==playerStreamSeq||String(currentTvId)!==String(id))return;
+      clearTimeout(cfOverlayHideTimer);
+      cfOverlayHideTimer=setTimeout(hideCfOverlay,220);
+    };
+    fr.addEventListener('load',onFreshLoad,{once:true});
+    fr.src=bust;
+  },1100);
+}
 function isAppleTouchDevice(){
   return /iPad|iPhone|iPod/i.test(navigator.userAgent||'')||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 }
@@ -1099,6 +1157,19 @@ function withTimeout(promise,ms,message='timeout'){
   const timeout=new Promise(resolve=>{timer=setTimeout(()=>resolve({ok:false,embedUrl:'',error:message}),ms);});
   return Promise.race([promise,timeout]).finally(()=>clearTimeout(timer));
 }
+function cancelPendingPlayerStream(){
+  playerStreamSeq++;
+  const controller=playerStreamController;
+  playerStreamController=null;
+  try{controller?.abort();}catch(e){}
+  return playerStreamSeq;
+}
+function beginPlayerStream(){
+  const seq=cancelPendingPlayerStream();
+  const controller=typeof AbortController==='undefined'?null:new AbortController();
+  playerStreamController=controller;
+  return {seq,signal:controller?.signal};
+}
 async function ensureStreamRemoteConfig(){
   try{
     const cfg=await fetchRemoteConfig();
@@ -1133,7 +1204,7 @@ function getEmbedUrl(id,type,season,episode,src,startSecs){
   if(lang&&lang!=='original')params.push(`hl=${lang}`);if(subs&&subs!=='none')params.push(`sl=${subs}`);addResumeParams(params,startSecs);
   return params.length?url+'?'+params.join('&'):url;
 }
-async function resolveStreamResult(id,type,season,episode,src,startSecs){
+async function resolveStreamResult(id,type,season,episode,src,startSecs,options={}){
   const anime=isAnimeSource(src);
   src=normalizeSourceForDevice(src,anime);
   const s=season||1,e=episode||1,fallback=getEmbedUrl(id,type,s,e,src,startSecs),providers=window.StreamGNProviders;
@@ -1143,15 +1214,15 @@ async function resolveStreamResult(id,type,season,episode,src,startSecs){
   if(anime)payload.flatEpisode=getAnimeFlatEpisode(s,e);
   try{
     const result=anime
-      ? await providers.getAnimeStream(payload)
+      ? await providers.getAnimeStream(payload,options)
       : type==='tv'
-        ? await providers.getSeriesStream(payload)
-        : await providers.getMovieStream(payload);
+        ? await providers.getSeriesStream(payload,options)
+        : await providers.getMovieStream(payload,options);
     return result||{ok:!!fallback,embedUrl:fallback};
   }catch(e){return {ok:!!fallback,embedUrl:fallback,error:'stream resolve failed'};}
 }
-async function resolveStreamUrl(id,type,season,episode,src,startSecs){
-  const result=await resolveStreamResult(id,type,season,episode,src,startSecs);
+async function resolveStreamUrl(id,type,season,episode,src,startSecs,options={}){
+  const result=await resolveStreamResult(id,type,season,episode,src,startSecs,options);
   return result?.embedUrl||result?.iframeUrl||result?.url||'';
 }
 async function setPlayerFrameSrc(id,type,season,episode,src,startSecs){
@@ -1161,24 +1232,33 @@ async function setPlayerFrameSrc(id,type,season,episode,src,startSecs){
   const anime=isAnimeSource(src);
   src=normalizeSourceForDevice(src,anime);
   if(String(currentTvId)===String(id))currentSrc=src;
-  const seq=++playerStreamSeq,fallback=getEmbedUrl(id,type,season,episode,src,startSecs),providers=window.StreamGNProviders;
+  const {seq,signal}=beginPlayerStream(),fallback=getEmbedUrl(id,type,season,episode,src,startSecs);
   if(anime)setFrameMessage(fr,'Caricamento episodio','Un attimo.');
-  else{showIframePlayer(fr);fr.removeAttribute('srcdoc');setIframeSrcIfChanged(fr,providers?.hasBackend?.()?'about:blank':fallback);}
-  const result=await withTimeout(resolveStreamResult(id,type,season,episode,src,startSecs),anime?12000:18000,'anime provider timeout');
-  if(seq!==playerStreamSeq||String(currentTvId)!==String(id))return;
-  let url=result?.embedUrl||result?.iframeUrl||result?.url||fallback;
-  if(!anime&&isUnstableMobilePlayerUrl(url)){
-    currentSrc=normalizeSourceForDevice('embed',false);
-    url=getEmbedUrl(id,type,season,episode,currentSrc,startSecs);
+  else{
+    const guarded=isCloudflareGuardedSource(src);
+    if(guarded&&!cfSelfHealDone)showCfOverlay();
+    showIframePlayer(fr);fr.removeAttribute('srcdoc');setIframeSrcIfChanged(fr,fallback);
+    if(guarded)scheduleVixsrcSelfHeal(seq,id,type,season,episode,src,startSecs);
   }
-  if(anime&&(!result?.ok||!isPlayablePlayerUrl(url,true))){
-    setFrameMessage(fr,'Anime non disponibile','Non sono riuscito a trovare questo episodio.');
-    return;
+  try{
+    const result=await withTimeout(resolveStreamResult(id,type,season,episode,src,startSecs,{signal}),anime?12000:18000,'anime provider timeout');
+    if(seq!==playerStreamSeq||String(currentTvId)!==String(id))return;
+    let url=result?.embedUrl||result?.iframeUrl||result?.url||fallback;
+    if(!anime&&isUnstableMobilePlayerUrl(url)){
+      currentSrc=normalizeSourceForDevice('embed',false);
+      url=getEmbedUrl(id,type,season,episode,currentSrc,startSecs);
+    }
+    if(anime&&(!result?.ok||!isPlayablePlayerUrl(url,true))){
+      setFrameMessage(fr,'Anime non disponibile','Non sono riuscito a trovare questo episodio.');
+      return;
+    }
+    if(isDirectVideoUrl(url)&&setNativeVideoSrc(url,startSecs))return;
+    showIframePlayer(fr);
+    fr.removeAttribute('srcdoc');
+    setIframeSrcIfChanged(fr,url||fallback);
+  }finally{
+    if(seq===playerStreamSeq)playerStreamController=null;
   }
-  if(isDirectVideoUrl(url)&&setNativeVideoSrc(url,startSecs))return;
-  showIframePlayer(fr);
-  fr.removeAttribute('srcdoc');
-  setIframeSrcIfChanged(fr,url||fallback);
 }
 
 /* TRAILERS */
@@ -1884,6 +1964,7 @@ document.addEventListener('keydown',e=>{
 function preparePlayerFrame(frame=document.getElementById('vix-frame')){
   if(!frame)return;
   frame.removeAttribute('sandbox');
+  hideCfOverlay();
 }
 function buildSrcToggle(){const toggle=document.getElementById('src-toggle');if(toggle)toggle.innerHTML='';updateSourceState();}
 function reloadPlayer(saveFirst=true){if(saveFirst)requestPlayerRealProgress();clearTimeout(playerSourceHealthTimer);const tc=document.getElementById('tv-ctrl');const s=document.getElementById('s-sel').value||1,ep=document.getElementById('e-sel').value||1;preparePlayerFrame();if(tc.style.display!=='none'&&currentTvId){const prog=getProgress(currentTvId,'tv',s,ep);setPlayerFrameSrc(currentTvId,'tv',s,ep,currentSrc,prog?prog.secs:0);resetPlayerAutoClock();}else if(currentTvId){const prog=getProgress(currentTvId,'movie',null,null);setPlayerFrameSrc(currentTvId,'movie',null,null,currentSrc,prog?prog.secs:0);resetPlayerAutoClock();}updateSourceState();}
@@ -1961,7 +2042,42 @@ async function openPlayer(id,type,title,poster,season,episode,isAnime){
   removeJSONKey(PLAYER_CLOSED_KEY);
   currentIsAnime=resolvedAnime;currentSrc=getPreferredSource(id,type,initialS,initialE,resolvedAnime,resolvedAnime?'streamrip':'vixsrc');currentTvId=String(id);document.getElementById('pm-title').textContent=title;document.getElementById('anime-note').style.display='none';buildSrcToggle(resolvedAnime);autoAddToWatching({id:String(id),type,title,poster:poster||'',isAnime:resolvedAnime});
   playerProgId=String(id);playerProgType=type;playerProgSeason=type==='tv'?Number(initialS):null;playerProgEpisode=type==='tv'?Number(initialE):null;playerNoteSavedThisSession=true;playerSessionTitle=title;playerSessionPoster=poster||'';playerSessionIsAnime=resolvedAnime;playerSessionAnimeTitles=resolvedAnime?uniqueTextList([title,...(currentDetailId===String(id)?currentDetailAnimeTitles:[])]):[];playerSessionSeasons=[];playerLastAutoSecs=0;playerLastAutoSaveAt=0;stopPlayerAutoSave(false);hideReminderOverlay();document.getElementById('pm-note-bar').classList.remove('highlight');updateDeviceMediaSession(title,type,poster,season,episode);startPlayerStateHeartbeat('open-player');
-  if(type==='tv'){setPlayerTvControlsVisible(true);const sSel=document.getElementById('s-sel'),eSel=document.getElementById('e-sel');sSel.innerHTML='<option>Caricamento...</option>';eSel.innerHTML='<option>Caricamento...</option>';syncPlayerPickers();const playerModal=document.getElementById('player-modal');playerModal.classList.add('open');resetPanelScroll(playerModal);lockBodyScroll();const lastS=initialS,lastE=initialE;try{const show=await tmdb(`/tv/${id}`);if(resolvedAnime)playerSessionAnimeTitles=uniqueTextList([...playerSessionAnimeTitles,...animeTitleCandidates(show,title)]);const seasons=(show.seasons||[]).filter(s=>s.season_number>0);if(!seasons.length)seasons.push({season_number:1,episode_count:10,name:'Stagione 1'});playerSessionSeasons=seasons;sSel.innerHTML=seasons.map(s=>`<option value="${s.season_number}">S${s.season_number} - ${s.name||'Stagione '+s.season_number} (${s.episode_count||'?'} ep.)</option>`).join('');sSel.value=String(lastS);syncPlayerPickers();await loadEpisodesForPlayer(id,sSel.value,lastE);}catch(e){sSel.innerHTML='<option value="1">Stagione 1</option>';eSel.innerHTML='<option value="1">Episodio 1</option>';syncPlayerPickers();}const s=sSel.value||1,ep=document.getElementById('e-sel').value||1;playerProgSeason=Number(s);playerProgEpisode=Number(ep);syncPlayerPickers();currentSrc=getPreferredSource(id,type,s,ep,resolvedAnime,currentSrc);buildSrcToggle(resolvedAnime);refreshNoteBar(id,type,s,ep);const prog=getProgress(id,type,s,ep);preparePlayerFrame();setPlayerFrameSrc(id,type,s,ep,currentSrc,prog?prog.secs:0);startPlayerAutoSave(prog?prog.secs:0);saveWatching(id,type,title,poster,s,ep);updateNextEpisodeButton();updateSourceState();}
+  if(type==='tv'){
+    setPlayerTvControlsVisible(true);
+    const sSel=document.getElementById('s-sel'),eSel=document.getElementById('e-sel');
+    sSel.innerHTML='<option>Caricamento...</option>';
+    eSel.innerHTML='<option>Caricamento...</option>';
+    syncPlayerPickers();
+    const playerModal=document.getElementById('player-modal');
+    playerModal.classList.add('open');
+    resetPanelScroll(playerModal);
+    lockBodyScroll();
+    const lastS=initialS,lastE=initialE,openSeq=++playerOpenSeq;
+    preparePlayerFrame();
+    setFrameMessage(document.getElementById('vix-frame'),'Preparazione episodio','Imposto la stagione e l’episodio selezionati.');
+    try{
+      const show=await tmdb(`/tv/${id}`);
+      if(openSeq!==playerOpenSeq||String(currentTvId)!==String(id))return;
+      if(resolvedAnime)playerSessionAnimeTitles=uniqueTextList([...playerSessionAnimeTitles,...animeTitleCandidates(show,title)]);
+      const seasons=(show.seasons||[]).filter(s=>s.season_number>0);
+      if(!seasons.length)seasons.push({season_number:1,episode_count:10,name:'Stagione 1'});
+      playerSessionSeasons=seasons;
+      sSel.innerHTML=seasons.map(s=>`<option value="${s.season_number}">S${s.season_number} - ${s.name||'Stagione '+s.season_number} (${s.episode_count||'?'} ep.)</option>`).join('');
+      sSel.value=String(lastS);
+      syncPlayerPickers();
+      await loadEpisodesForPlayer(id,sSel.value,lastE);
+    }catch(e){
+      if(openSeq!==playerOpenSeq||String(currentTvId)!==String(id))return;
+      sSel.innerHTML=`<option value="${lastS}">Stagione ${lastS}</option>`;
+      eSel.innerHTML=`<option value="${lastE}">Episodio ${lastE}</option>`;
+      syncPlayerPickers();
+    }
+    if(openSeq!==playerOpenSeq||String(currentTvId)!==String(id))return;
+    const s=sSel.value||lastS,ep=eSel.value||lastE;
+    const prog=getProgress(id,type,s,ep);
+    loadSelectedTvEpisode(s,ep);
+    startPlayerAutoSave(prog?prog.secs:0);
+  }
   else{setPlayerTvControlsVisible(false);playerProgSeason=null;playerProgEpisode=null;refreshNoteBar(id,type,null,null);const prog=getProgress(id,type,null,null);preparePlayerFrame();setPlayerFrameSrc(id,type,null,null,currentSrc,prog?prog.secs:0);startPlayerAutoSave(prog?prog.secs:0);const playerModal=document.getElementById('player-modal');playerModal.classList.add('open');resetPanelScroll(playerModal);lockBodyScroll();saveWatching(id,type,title,poster,null,null);updateNextEpisodeButton();updateSourceState();}
   savePlayerNavState(true);
   ensurePlayerHistoryGuard();
@@ -1982,7 +2098,7 @@ async function loadEpisodesForPlayer(showId,season,preselect){
   }
   syncPlayerPickers();
 }
-function doClosePlayer(){pipActive=false;stopPlayerStateHeartbeat();clearSavedPlayerNavState();closePlayerPickers();clearTimeout(epChangeTimer);clearTimeout(playerSourceHealthTimer);stopPlayerAutoSave(true);hideReminderOverlay();const fr=document.getElementById('vix-frame');smoothClose(document.getElementById('player-modal'),180,()=>{fr.src='';fr.removeAttribute('srcdoc');fr.style.display='block';stopNativeVideo(true);unlockBodyScrollIfClear();document.getElementById('anime-note').style.display='none';currentTvId=null;playerProgId=null;playerSessionTitle='';playerSessionPoster='';playerSessionIsAnime=false;playerSessionAnimeTitles=[];playerSessionSeasons=[];refreshCW();});}
+function doClosePlayer(){pipActive=false;playerOpenSeq++;cancelPendingPlayerStream();stopPlayerStateHeartbeat();clearSavedPlayerNavState();closePlayerPickers();clearTimeout(epChangeTimer);clearTimeout(playerSourceHealthTimer);clearTimeout(cfSelfHealTimer);hideCfOverlay();stopPlayerAutoSave(true);hideReminderOverlay();const fr=document.getElementById('vix-frame');smoothClose(document.getElementById('player-modal'),180,()=>{fr.src='';fr.removeAttribute('srcdoc');fr.style.display='block';stopNativeVideo(true);unlockBodyScrollIfClear();document.getElementById('anime-note').style.display='none';currentTvId=null;playerProgId=null;playerSessionTitle='';playerSessionPoster='';playerSessionIsAnime=false;playerSessionAnimeTitles=[];playerSessionSeasons=[];refreshCW();});}
 function attemptClosePlayer(){hideReminderOverlay();doClosePlayer();}
 function closePlayer(){attemptClosePlayer();}
 document.getElementById('btn-player-back').addEventListener('click',attemptClosePlayer);

@@ -62,13 +62,24 @@
       kind:data?.kind||'iframe'
     };
   }
-  function timeoutSignal(ms=7000){
-    if(typeof AbortController==='undefined')return {};
+  function timeoutSignal(ms=7000,externalSignal){
+    if(typeof AbortController==='undefined')return {signal:externalSignal,dispose:()=>{}};
     const controller=new AbortController();
-    setTimeout(()=>controller.abort(),ms);
-    return {signal:controller.signal};
+    const abort=()=>controller.abort();
+    const timer=setTimeout(abort,ms);
+    if(externalSignal){
+      if(externalSignal.aborted)abort();
+      else externalSignal.addEventListener('abort',abort,{once:true});
+    }
+    return {
+      signal:controller.signal,
+      dispose:()=>{
+        clearTimeout(timer);
+        externalSignal?.removeEventListener?.('abort',abort);
+      }
+    };
   }
-  async function callBackend(kind,params,fallbackUrl){
+  async function callBackend(kind,params,fallbackUrl,options={}){
     const API_BASE=apiBase();
     if(!API_BASE)return null;
     const route=ROUTES[kind];if(!route)return null;
@@ -80,11 +91,12 @@
       else qs.set(key,String(value));
     });
     const url=`${API_BASE}${path}${qs.size?'?'+qs.toString():''}`;
+    const request=timeoutSignal(10000,options.signal);
     try{
-      const r=await fetch(url,{cache:'no-store',...timeoutSignal(10000)});
+      const r=await fetch(url,{cache:'no-store',signal:request.signal});
       if(!r.ok)return null;
       return cleanResult(await r.json(),fallbackUrl);
-    }catch(e){return null;}
+    }catch(e){return null;}finally{request.dispose();}
   }
   function vixsrcMovie(id,startSecs,settings={}){
     const params=new URLSearchParams();
@@ -174,18 +186,21 @@
     if(names.some(name=>name.includes(wanted)||wanted.includes(name)))return 60;
     return 40;
   }
-  async function queryAniList(search){
+  async function queryAniList(search,options={}){
     const query=`query ($search:String){ Media(search:$search,type:ANIME){ id idMal title{romaji english native userPreferred} synonyms episodes format status seasonYear } }`;
-    const r=await fetch(aniListApiBase(),{
+    const request=timeoutSignal(9000,options.signal);
+    try{
+      const r=await fetch(aniListApiBase(),{
       method:'POST',
       headers:{'content-type':'application/json','accept':'application/json'},
       body:JSON.stringify({query,variables:{search}}),
-      ...timeoutSignal(9000)
-    });
-    if(!r.ok)return null;
-    return (await r.json())?.data?.Media||null;
+        signal:request.signal
+      });
+      if(!r.ok)return null;
+      return (await r.json())?.data?.Media||null;
+    }finally{request.dispose();}
   }
-  async function resolveAniListId(params={}){
+  async function resolveAniListId(params={},options={}){
     const direct=params.anilistId||params.aniListId||params.anilist_id||params.animeId;
     if(direct)return Number(direct);
     const cache=readAniListCache();
@@ -205,7 +220,7 @@
     let best=null,bestTitle='';
     for(const title of titles){
       try{
-        const media=await queryAniList(title);
+        const media=await queryAniList(title,options);
         if(!media?.id)continue;
         const score=titleMatchScore(title,media);
         if(!best||score>best.score){best={...media,score};bestTitle=title;}
@@ -227,28 +242,28 @@
     return `${streamripBase()}/anime/${encodeURIComponent(anilistId)}/${encodeURIComponent(getAnimeEpisode({episode}))}`;
   }
 
-  async function getMovieStream(params){
+  async function getMovieStream(params={},options={}){
     params={...params,provider:normalizePlaybackSource(params?.provider||params?.source||'vixsrc'),source:normalizePlaybackSource(params?.source||params?.provider||'vixsrc')};
     const fallback=fallbackBySource('movie',params);
-    return await callBackend('movie',params,fallback)||{ok:true,provider:params.provider||'vixsrc',embedUrl:fallback};
+    return await callBackend('movie',params,fallback,options)||{ok:true,provider:params.provider||'vixsrc',embedUrl:fallback};
   }
-  async function getSeriesStream(params){
+  async function getSeriesStream(params={},options={}){
     params={...params,provider:normalizePlaybackSource(params?.provider||params?.source||'vixsrc'),source:normalizePlaybackSource(params?.source||params?.provider||'vixsrc')};
     const fallback=fallbackBySource('tv',params);
-    return await callBackend('tv',params,fallback)||{ok:true,provider:params.provider||'vixsrc',embedUrl:fallback};
+    return await callBackend('tv',params,fallback,options)||{ok:true,provider:params.provider||'vixsrc',embedUrl:fallback};
   }
-  async function getAnimeStream(params){
-    const anilistId=await resolveAniListId(params);
+  async function getAnimeStream(params={},options={}){
+    const anilistId=await resolveAniListId(params,options);
     const episode=getAnimeEpisode(params);
     const fallback=streamripAnimeUrl(anilistId,episode);
     if(!anilistId)return {ok:false,provider:'streamrip',embedUrl:'',error:'anilist not found'};
     const payload={...params,anilistId,episode,flatEpisode:episode,provider:'streamrip',source:'streamrip',fallbackUrl:fallback};
-    const backend=await callBackend('anime',payload,fallback);
+    const backend=await callBackend('anime',payload,fallback,options);
     return backend||{ok:true,provider:'streamrip',embedUrl:fallback,kind:'iframe',anilistId,episode};
   }
-  async function getSportStream(params={}){
+  async function getSportStream(params={},options={}){
     const fallback=params.fallbackUrl||liveConfig().sportDefaultUrl||'';
-    return await callBackend('sport',params,fallback)||{ok:true,provider:'configured',embedUrl:fallback};
+    return await callBackend('sport',params,fallback,options)||{ok:true,provider:'configured',embedUrl:fallback};
   }
   function getAnimeFallbackUrl(params={}){
     const anilistId=params.anilistId||params.aniListId||params.anilist_id||params.animeId;
