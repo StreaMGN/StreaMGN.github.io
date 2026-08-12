@@ -55,12 +55,16 @@ test('player suppresses the blocked referrer on the first and PiP navigations', 
   const prepareStart = app.indexOf('function preparePlayerFrame');
   const prepareEnd = app.indexOf('\nfunction buildSrcToggle', prepareStart);
   const prepareCode = app.slice(prepareStart, prepareEnd);
+  const setterStart = app.indexOf('function setIframeSrcIfChanged');
+  const setterEnd = app.indexOf('\nfunction setFrameMessage', setterStart);
+  const setterCode = app.slice(setterStart, setterEnd);
   const pipStart = app.indexOf("const ic=pw.document.createElement('iframe')");
   const pipEnd = app.indexOf("ic.style.cssText", pipStart);
   const pipCode = app.slice(pipStart, pipEnd);
 
   assert.match(iframe, /referrerpolicy="no-referrer"/);
   assert.match(prepareCode, /frame\.referrerPolicy=PLAYER_REFERRER_POLICY/);
+  assert.ok(setterCode.indexOf('preparePlayerFrame(frame)') < setterCode.indexOf('frame.src=next'), 'every iframe navigation must set the referrer policy first');
   assert.ok(pipCode.indexOf('ic.referrerPolicy=') < pipCode.indexOf('ic.src='), 'PiP must set the referrer policy before navigating');
 });
 
@@ -112,6 +116,6 @@ test('all PWA entry points reference the same player build', async () => {
   ]);
 
   for (const source of [app, html, manifest, worker]) {
-    assert.match(source, /20260812-player21/);
+    assert.match(source, /20260812-player22/);
   }
 });
