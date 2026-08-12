@@ -32,17 +32,48 @@ function loadProviders(config = {}, fetchImpl = async () => ({ ok: false })) {
 
 const providerSource = await readProjectFile('assets/providers.js');
 
-test('initial TV playback waits for the selected episode path', async () => {
+test('initial TV playback starts through the selected episode path before metadata', async () => {
   const appSource = await readProjectFile('assets/app.js');
   const playerStart = appSource.indexOf('async function openPlayer');
   const playerEnd = appSource.indexOf('\nasync function loadEpisodesForPlayer', playerStart);
   const playerCode = appSource.slice(playerStart, playerEnd);
   const metadataLoad = playerCode.indexOf('await loadEpisodesForPlayer');
-  const selectedEpisodeLoad = playerCode.indexOf('loadSelectedTvEpisode(s,ep);');
+  const selectedEpisodeLoad = playerCode.indexOf('loadSelectedTvEpisode(lastS,lastE);');
 
-  assert.ok(metadataLoad >= 0, 'the season episode list must load first');
-  assert.ok(selectedEpisodeLoad > metadataLoad, 'initial playback must use the same selected-episode flow as a manual change');
+  assert.ok(metadataLoad >= 0, 'season and episode metadata must still load');
+  assert.ok(selectedEpisodeLoad >= 0, 'initial playback must use the selected-episode flow');
+  assert.ok(selectedEpisodeLoad < metadataLoad, 'initial playback must start before metadata requests finish');
   assert.doesNotMatch(playerCode, /setPlayerFrameSrc\(id,type,lastS,lastE/);
+});
+
+test('player suppresses the blocked referrer on the first and PiP navigations', async () => {
+  const [app, html] = await Promise.all([
+    readProjectFile('assets/app.js'),
+    readProjectFile('index.html')
+  ]);
+  const iframe = html.match(/<iframe id="vix-frame"[^>]*>/)?.[0] || '';
+  const prepareStart = app.indexOf('function preparePlayerFrame');
+  const prepareEnd = app.indexOf('\nfunction buildSrcToggle', prepareStart);
+  const prepareCode = app.slice(prepareStart, prepareEnd);
+  const pipStart = app.indexOf("const ic=pw.document.createElement('iframe')");
+  const pipEnd = app.indexOf("ic.style.cssText", pipStart);
+  const pipCode = app.slice(pipStart, pipEnd);
+
+  assert.match(iframe, /referrerpolicy="no-referrer"/);
+  assert.match(prepareCode, /frame\.referrerPolicy=PLAYER_REFERRER_POLICY/);
+  assert.ok(pipCode.indexOf('ic.referrerPolicy=') < pipCode.indexOf('ic.src='), 'PiP must set the referrer policy before navigating');
+});
+
+test('player does not perform the delayed VixSrc self-heal navigation', async () => {
+  const [app, html, css] = await Promise.all([
+    readProjectFile('assets/app.js'),
+    readProjectFile('index.html'),
+    readProjectFile('assets/styles.css')
+  ]);
+
+  assert.doesNotMatch(app, /scheduleVixsrcSelfHeal|cfSelfHeal|_r=/);
+  assert.doesNotMatch(html, /pm-cf-overlay/);
+  assert.doesNotMatch(css, /pm-cf-overlay/);
 });
 
 test('provider uses its standard URL when no backend is configured', async () => {
@@ -81,6 +112,6 @@ test('all PWA entry points reference the same player build', async () => {
   ]);
 
   for (const source of [app, html, manifest, worker]) {
-    assert.match(source, /20260804-player20/);
+    assert.match(source, /20260812-player21/);
   }
 });

@@ -1,8 +1,8 @@
 'use strict';
 const CONFIG=window.STREAMGN_CONFIG||{};
-const APP_BUILD='20260804-player20';
+const APP_BUILD='20260812-player21';
 window.STREAMGN_BUILD=APP_BUILD;
-const APP_CACHE='streamgn-v63';
+const APP_CACHE='streamgn-v64';
 const SW_URL=`./sw.js?v=${APP_BUILD}`;
 const TMDB_KEY=CONFIG.tmdbKey||'';
 const IMG=CONFIG.images?.poster||'https://image.tmdb.org/t/p/w342',IMG_W=CONFIG.images?.posterWide||'https://image.tmdb.org/t/p/w780',BIG=CONFIG.images?.backdrop||'https://image.tmdb.org/t/p/w1280',ORIG=CONFIG.images?.original||'https://image.tmdb.org/t/p/original',FACE=CONFIG.images?.face||'https://image.tmdb.org/t/p/w185',STILL=CONFIG.images?.still||'https://image.tmdb.org/t/p/w300';
@@ -27,64 +27,9 @@ const SOURCE_LABELS={vixsrc:'VixSrc',vidsrc:'VidSrc',embed:'Embed.su',anime:'Str
 function sourceListFromConfig(kind,fallback){return (CONFIG.streamUiSources?.[kind]||fallback).map(id=>({id,label:SOURCE_LABELS[id]||id}));}
 const SOURCES_NORMAL=sourceListFromConfig('normal',['vixsrc','vidsrc','embed']);
 const SOURCES_ANIME=sourceListFromConfig('anime',['anime']);
-
-/* ============================================================
-   VIXSRC — AUTO-RIPRISTINO PRIMO CARICAMENTO
-   VixSrc e dietro Cloudflare. La primissima richiesta di una
-   sessione browser verso quel dominio puo tornare bloccata
-   ("Sorry, you have been blocked"), ma qualunque richiesta
-   successiva nella STESSA sessione funziona sempre — infatti
-   basta cambiare episodio per farlo ripartire. Per non far
-   vedere il blocco all'utente, replichiamo automaticamente
-   quello stesso comportamento: se il primo contenuto VixSrc
-   aperto in questa sessione non viene toccato dall'utente,
-   dopo un attimo ricarichiamo da sola la stessa pagina nello
-   stesso iframe — esattamente come un cambio episodio manuale,
-   ma automatico. Avviene UNA SOLA VOLTA per sessione, cosi non
-   interrompe mai le riproduzioni successive (che gia oggi
-   funzionano al primo colpo). Mentre questo primo tentativo e
-   in corso, un overlay copre l'iframe cosi l'eventuale pagina
-   di blocco non e mai visibile: si vede solo un caricamento,
-   che scompare quando il contenuto vero e pronto.
-   ============================================================ */
-const CF_GUARDED_SOURCES=new Set(['vixsrc','vixsrc-it']);
-function isCloudflareGuardedSource(src){return CF_GUARDED_SOURCES.has(src);}
-let cfSelfHealDone=false;
-let cfSelfHealTimer=0;
-let cfOverlayHideTimer=0;
-function showCfOverlay(){
-  const ov=document.getElementById('pm-cf-overlay');
-  if(ov)ov.hidden=false;
-}
-function hideCfOverlay(){
-  clearTimeout(cfOverlayHideTimer);
-  const ov=document.getElementById('pm-cf-overlay');
-  if(ov)ov.hidden=true;
-}
-function scheduleVixsrcSelfHeal(seq,id,type,season,episode,src,startSecs){
-  if(cfSelfHealDone){hideCfOverlay();return;}
-  cfSelfHealDone=true;
-  showCfOverlay();
-  clearTimeout(cfSelfHealTimer);
-  clearTimeout(cfOverlayHideTimer);
-  /* Se per qualsiasi motivo l'overlay restasse coperto troppo a lungo, lo togliamo comunque */
-  cfOverlayHideTimer=setTimeout(hideCfOverlay,4200);
-  cfSelfHealTimer=setTimeout(()=>{
-    if(seq!==playerStreamSeq||String(currentTvId)!==String(id)){hideCfOverlay();return;}
-    const fr=document.getElementById('vix-frame');
-    if(!fr||fr.style.display==='none'){hideCfOverlay();return;}
-    const base=getEmbedUrl(id,type,season,episode,src,startSecs);
-    if(!base||base==='about:blank'){hideCfOverlay();return;}
-    const bust=base+(base.includes('?')?'&':'?')+'_r='+Date.now().toString(36);
-    const onFreshLoad=()=>{
-      if(seq!==playerStreamSeq||String(currentTvId)!==String(id))return;
-      clearTimeout(cfOverlayHideTimer);
-      cfOverlayHideTimer=setTimeout(hideCfOverlay,220);
-    };
-    fr.addEventListener('load',onFreshLoad,{once:true});
-    fr.src=bust;
-  },1100);
-}
+/* The player host rejects StreaMGN's cross-site Referer. Apply this before
+   every iframe navigation so the first request succeeds without a retry. */
+const PLAYER_REFERRER_POLICY='no-referrer';
 function isAppleTouchDevice(){
   return /iPad|iPhone|iPod/i.test(navigator.userAgent||'')||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 }
@@ -1235,10 +1180,7 @@ async function setPlayerFrameSrc(id,type,season,episode,src,startSecs){
   const {seq,signal}=beginPlayerStream(),fallback=getEmbedUrl(id,type,season,episode,src,startSecs);
   if(anime)setFrameMessage(fr,'Caricamento episodio','Un attimo.');
   else{
-    const guarded=isCloudflareGuardedSource(src);
-    if(guarded&&!cfSelfHealDone)showCfOverlay();
     showIframePlayer(fr);fr.removeAttribute('srcdoc');setIframeSrcIfChanged(fr,fallback);
-    if(guarded)scheduleVixsrcSelfHeal(seq,id,type,season,episode,src,startSecs);
   }
   try{
     const result=await withTimeout(resolveStreamResult(id,type,season,episode,src,startSecs,{signal}),anime?12000:18000,'anime provider timeout');
@@ -1964,7 +1906,7 @@ document.addEventListener('keydown',e=>{
 function preparePlayerFrame(frame=document.getElementById('vix-frame')){
   if(!frame)return;
   frame.removeAttribute('sandbox');
-  hideCfOverlay();
+  frame.referrerPolicy=PLAYER_REFERRER_POLICY;
 }
 function buildSrcToggle(){const toggle=document.getElementById('src-toggle');if(toggle)toggle.innerHTML='';updateSourceState();}
 function reloadPlayer(saveFirst=true){if(saveFirst)requestPlayerRealProgress();clearTimeout(playerSourceHealthTimer);const tc=document.getElementById('tv-ctrl');const s=document.getElementById('s-sel').value||1,ep=document.getElementById('e-sel').value||1;preparePlayerFrame();if(tc.style.display!=='none'&&currentTvId){const prog=getProgress(currentTvId,'tv',s,ep);setPlayerFrameSrc(currentTvId,'tv',s,ep,currentSrc,prog?prog.secs:0);resetPlayerAutoClock();}else if(currentTvId){const prog=getProgress(currentTvId,'movie',null,null);setPlayerFrameSrc(currentTvId,'movie',null,null,currentSrc,prog?prog.secs:0);resetPlayerAutoClock();}updateSourceState();}
@@ -2045,16 +1987,17 @@ async function openPlayer(id,type,title,poster,season,episode,isAnime){
   if(type==='tv'){
     setPlayerTvControlsVisible(true);
     const sSel=document.getElementById('s-sel'),eSel=document.getElementById('e-sel');
-    sSel.innerHTML='<option>Caricamento...</option>';
-    eSel.innerHTML='<option>Caricamento...</option>';
+    sSel.innerHTML=`<option value="${initialS}">Stagione ${initialS}</option>`;
+    eSel.innerHTML=`<option value="${initialE}">Episodio ${initialE}</option>`;
     syncPlayerPickers();
     const playerModal=document.getElementById('player-modal');
     playerModal.classList.add('open');
     resetPanelScroll(playerModal);
     lockBodyScroll();
     const lastS=initialS,lastE=initialE,openSeq=++playerOpenSeq;
-    preparePlayerFrame();
-    setFrameMessage(document.getElementById('vix-frame'),'Preparazione episodio','Imposto la stagione e l’episodio selezionati.');
+    loadSelectedTvEpisode(lastS,lastE);
+    const initialProg=getProgress(id,type,lastS,lastE);
+    startPlayerAutoSave(initialProg?initialProg.secs:0);
     try{
       const show=await tmdb(`/tv/${id}`);
       if(openSeq!==playerOpenSeq||String(currentTvId)!==String(id))return;
@@ -2074,9 +2017,7 @@ async function openPlayer(id,type,title,poster,season,episode,isAnime){
     }
     if(openSeq!==playerOpenSeq||String(currentTvId)!==String(id))return;
     const s=sSel.value||lastS,ep=eSel.value||lastE;
-    const prog=getProgress(id,type,s,ep);
-    loadSelectedTvEpisode(s,ep);
-    startPlayerAutoSave(prog?prog.secs:0);
+    if(String(s)!==String(lastS)||String(ep)!==String(lastE))loadSelectedTvEpisode(s,ep);
   }
   else{setPlayerTvControlsVisible(false);playerProgSeason=null;playerProgEpisode=null;refreshNoteBar(id,type,null,null);const prog=getProgress(id,type,null,null);preparePlayerFrame();setPlayerFrameSrc(id,type,null,null,currentSrc,prog?prog.secs:0);startPlayerAutoSave(prog?prog.secs:0);const playerModal=document.getElementById('player-modal');playerModal.classList.add('open');resetPanelScroll(playerModal);lockBodyScroll();saveWatching(id,type,title,poster,null,null);updateNextEpisodeButton();updateSourceState();}
   savePlayerNavState(true);
@@ -2098,7 +2039,7 @@ async function loadEpisodesForPlayer(showId,season,preselect){
   }
   syncPlayerPickers();
 }
-function doClosePlayer(){pipActive=false;playerOpenSeq++;cancelPendingPlayerStream();stopPlayerStateHeartbeat();clearSavedPlayerNavState();closePlayerPickers();clearTimeout(epChangeTimer);clearTimeout(playerSourceHealthTimer);clearTimeout(cfSelfHealTimer);hideCfOverlay();stopPlayerAutoSave(true);hideReminderOverlay();const fr=document.getElementById('vix-frame');smoothClose(document.getElementById('player-modal'),180,()=>{fr.src='';fr.removeAttribute('srcdoc');fr.style.display='block';stopNativeVideo(true);unlockBodyScrollIfClear();document.getElementById('anime-note').style.display='none';currentTvId=null;playerProgId=null;playerSessionTitle='';playerSessionPoster='';playerSessionIsAnime=false;playerSessionAnimeTitles=[];playerSessionSeasons=[];refreshCW();});}
+function doClosePlayer(){pipActive=false;playerOpenSeq++;cancelPendingPlayerStream();stopPlayerStateHeartbeat();clearSavedPlayerNavState();closePlayerPickers();clearTimeout(epChangeTimer);clearTimeout(playerSourceHealthTimer);stopPlayerAutoSave(true);hideReminderOverlay();const fr=document.getElementById('vix-frame');smoothClose(document.getElementById('player-modal'),180,()=>{fr.src='';fr.removeAttribute('srcdoc');fr.style.display='block';stopNativeVideo(true);unlockBodyScrollIfClear();document.getElementById('anime-note').style.display='none';currentTvId=null;playerProgId=null;playerSessionTitle='';playerSessionPoster='';playerSessionIsAnime=false;playerSessionAnimeTitles=[];playerSessionSeasons=[];refreshCW();});}
 function attemptClosePlayer(){hideReminderOverlay();doClosePlayer();}
 function closePlayer(){attemptClosePlayer();}
 document.getElementById('btn-player-back').addEventListener('click',attemptClosePlayer);
@@ -2139,6 +2080,7 @@ async function activatePiP(silent=false){
     try{
       const pw=await window.documentPictureInPicture.requestWindow({width:480,height:270});
       const ic=pw.document.createElement('iframe');
+      ic.referrerPolicy=fr.referrerPolicy||PLAYER_REFERRER_POLICY;
       ic.src=fr.src;
       ic.style.cssText='width:100%;height:100%;border:none;background:#000';
       ic.setAttribute('allow','autoplay; fullscreen; picture-in-picture; encrypted-media');
